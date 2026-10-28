@@ -204,6 +204,12 @@ function applyEdgeSettings(){recordHistory();announce('연결선 설정을 변�
 async function openStockFlow(file){
  if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
  stockFlow.value=file;
+ // Persist route synchronously, not only after network fetch, to avoid
+ // restoring a stale F01 when the user reloads immediately after an edit.
+ localStorage.setItem('shared-n8n-studio:investment:selected',file);
+ const route=new URL(window.location.href);
+ route.searchParams.set('workflow',file);
+ window.history.replaceState(null,'',route.pathname+route.search+route.hash);
  const stored=localStorage.getItem(storageKey());
  try{
    let data;
@@ -300,7 +306,12 @@ function fit(){fitView({padding:0.23,duration:250});announce('전체 화면 맞�
 onMounted(()=>{
   document.addEventListener('keydown',onKeyDown);
   recordHistory();
-  if(stockMode){const last=localStorage.getItem('shared-n8n-studio:investment:selected');openStockFlow(STOCK_WORKFLOWS.some(x=>x[0]===last)?last:STOCK_WORKFLOWS[0][0]);}
+  if(stockMode){
+    const path=new URLSearchParams(window.location.search).get('workflow');
+    const last=localStorage.getItem('shared-n8n-studio:investment:selected');
+    const chosen=STOCK_WORKFLOWS.some(x=>x[0]===path)?path:STOCK_WORKFLOWS.some(x=>x[0]===last)?last:STOCK_WORKFLOWS[0][0];
+    openStockFlow(chosen);
+  }
   else nextTick(()=>fitView({padding:.23,duration:0}));
 });
 onBeforeUnmount(()=>{document.removeEventListener('keydown',onKeyDown);if(taskTimer)clearTimeout(taskTimer);});
