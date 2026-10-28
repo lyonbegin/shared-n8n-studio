@@ -97,3 +97,25 @@ test('investment and procurement sample workflows now include business operation
   await expect(page.getByText('G2B 개찰 수집')).toBeVisible();
   await expect(page.getByText('10년 수집 완전성')).toBeVisible();
 });
+
+
+test('browser save and reload preserves every original plus added node and every edge',async({page})=>{
+  const initialIds=await page.locator('.studio-node').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-node-id')));
+  expect(initialIds).toHaveLength(5);
+  const before=await page.locator('.vue-flow__edge').count();
+  for(const kind of ['business-operation','approval','circuit-breaker']){
+    await page.getByRole('textbox',{name:'노드 검색'}).fill(kind==='business-operation'?'Business Operation':kind==='approval'?'Human Approval':'Circuit Breaker');
+    await page.locator('[data-node-kind="'+kind+'"]').click();
+  }
+  await expect(page.locator('.vue-flow__node')).toHaveCount(8);
+  const savedIds=await page.locator('.studio-node').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-node-id')).sort());
+  await page.getByRole('button',{name:'브라우저 저장'}).click();
+  await page.reload();
+  await page.locator('button[title="브라우저 저장값 불러오기"]').click();
+  await expect(page.locator('.vue-flow__node')).toHaveCount(8);
+  await expect(page.locator('.vue-flow__edge')).toHaveCount(before);
+  const restoredIds=await page.locator('.studio-node').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('data-node-id')).sort());
+  expect(restoredIds).toEqual(savedIds);
+  for(const id of initialIds)expect(restoredIds).toContain(id);
+  await expect(page.locator('.studio-node').filter({hasText:'재시도 대기'})).toHaveCount(1);
+});
