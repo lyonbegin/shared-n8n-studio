@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Shared n8n Pan Chrome Fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial;background:#101824;color:#e6eff8}header{height:64px;padding:14px 22px;border-bottom:1px solid #354354;display:flex;justify-content:space-between}header strong{font-size:16px}header small{color:#acc1d4}#workspace{display:flex;height:calc(100vh - 64px)}aside{width:245px;padding:20px;background:#18283a}aside p{font-size:12px;line-height:1.6}button{background:#2d668a;color:white;border:0;border-radius:6px;padding:10px;margin-top:7px;cursor:pointer}#pane{position:relative;flex:1;overflow:hidden;touch-action:none;background:#f5f8fb;background-image:radial-gradient(#d2dbe4 1px,transparent 1px);background-size:20px 20px;cursor:grab}#pane.dragging{cursor:grabbing}#stage{position:absolute;inset:0;transform-origin:top left;pointer-events:none}#nodes{position:absolute;inset:0;pointer-events:none}.node{position:absolute;width:185px;height:78px;pointer-events:auto;user-select:none;cursor:move;padding:12px 22px;background:#fff;color:#243f58;border:2px solid #9bb1c3;border-radius:12px;box-shadow:0 3px 14px #22334a22}.node.selected{border-color:#1aaf91}.node b{display:block;font-size:13px}.node small{display:block;margin-top:6px;color:#8093a3}.handle{position:absolute;right:-10px;top:30px;width:18px;height:18px;border-radius:50%;background:#0da28f;border:2px solid white;cursor:crosshair}.handle.input{left:-10px;right:auto;background:#d38a1b}#marquee{position:absolute;border:1px solid #2982c1;background:#258ad12b;display:none;pointer-events:none}#status{position:absolute;bottom:15px;left:15px;padding:9px 13px;background:#0f2236df;color:#fff;font-size:12px;border-radius:7px}
+</style></head><body>
+<header><strong>Shared n8n Pan · Browser Regression Fixture</strong><small>TEST ONLY · official upstream n8n is NOT deployed here</small></header>
+<div id="workspace"><aside><strong>Chrome 조작 테스트</strong><p>왼쪽/가운데 드래그: Pan<br>Shift + 왼쪽 드래그: 영역 선택<br>노드 드래그: 노드 이동<br>핸들 드래그: 연결</p><button id="add" type="button">노드 추가</button><button id="remove" type="button">선택 노드 삭제</button></aside>
+<main id="pane" data-testid="pane"><div id="stage"><div id="nodes"></div></div><div id="marquee"></div><div id="status">Ready</div></main></div>
+<script type="module">
+import { CANVAS_PAN } from '../../packages/pan/pan-contract.mjs';
+const pane=document.getElementById('pane'),stage=document.getElementById('stage'),nodesRoot=document.getElementById('nodes'),marquee=document.getElementById('marquee'),status=document.getElementById('status');
+const nodes=[{id:'n1',x:120,y:120,label:'투자 / 조달 노드 A'},{id:'n2',x:490,y:250,label:'공통 n8n 노드 B'}];
+let edges=[],offset={x:0,y:0},zoom=1,drag=null,selected=new Set(),serial=2;
+function data(){return {offset,zoom,nodes:nodes.map(n=>({id:n.id,x:n.x,y:n.y})),edges,selected:[...selected]};}
+window.getCanvasState=data;
+function redraw(){
+  stage.style.transform='translate('+offset.x+'px,'+offset.y+'px) scale('+zoom+')';
+  nodesRoot.innerHTML='';
+  for(const n of nodes){
+    const el=document.createElement('div');el.className='node'+(selected.has(n.id)?' selected':'');
+    el.dataset.nodeId=n.id;el.style.left=n.x+'px';el.style.top=n.y+'px';
+    el.innerHTML='<span class="handle input" data-target="'+n.id+'"></span><b>'+n.label+'</b><small>'+n.id+'</small><span class="handle" data-source="'+n.id+'"></span>';
+    nodesRoot.append(el);
+  }
+}
+function local(e){const r=pane.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
+function setStatus(s){status.textContent=s;}
+pane.addEventListener('pointerdown',e=>{
+  if(e.button!==0&&e.button!==1)return;
+  const element=e.target,p=local(e),source=element.closest('[data-source]'),node=element.closest('.node');
+  if(source&&e.button===0){drag={type:'connect',id:source.dataset.source};return;}
+  if(node&&e.button===0){const n=nodes.find(n=>n.id===node.dataset.nodeId);selected=new Set([n.id]);drag={type:'node',id:n.id,start:p,origin:{x:n.x,y:n.y}};redraw();return;}
+  if(!node&&e.shiftKey&&e.button===0){drag={type:'select',start:p};marquee.style.display='block';return;}
+  if(!node&&CANVAS_PAN.panButtons.includes(e.button)){drag={type:'pan',start:p,origin:{...offset}};pane.classList.add('dragging');return;}
+});
+window.addEventListener('pointermove',e=>{
+ if(!drag)return;const p=local(e);
+ if(drag.type==='pan'){offset={x:drag.origin.x+p.x-drag.start.x,y:drag.origin.y+p.y-drag.start.y};redraw();}
+ if(drag.type==='node'){const n=nodes.find(n=>n.id===drag.id);n.x=drag.origin.x+(p.x-drag.start.x)/zoom;n.y=drag.origin.y+(p.y-drag.start.y)/zoom;redraw();}
+ if(drag.type==='select'){marquee.style.left=Math.min(p.x,drag.start.x)+'px';marquee.style.top=Math.min(p.y,drag.start.y)+'px';marquee.style.width=Math.abs(p.x-drag.start.x)+'px';marquee.style.height=Math.abs(p.y-drag.start.y)+'px';}
+});
+window.addEventListener('pointerup',e=>{
+ if(!drag)return;
+ if(drag.type==='connect'){const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-target]');if(target&&target.dataset.target!==drag.id){edges.push({source:drag.id,target:target.dataset.target});setStatus('Connected');}}
+ if(drag.type==='select'){const end=local(e),x0=Math.min(drag.start.x,end.x),x1=Math.max(drag.start.x,end.x),y0=Math.min(drag.start.y,end.y),y1=Math.max(drag.start.y,end.y);selected=new Set(nodes.filter(n=>{const sx=n.x*zoom+offset.x,sy=n.y*zoom+offset.y;return sx>=x0&&sx<=x1&&sy>=y0&&sy<=y1}).map(n=>n.id));marquee.style.display='none';}
+ pane.classList.remove('dragging');drag=null;redraw();
+});
+pane.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.2,Math.min(2,zoom+(e.deltaY<0?.12:-.12)));redraw();},{passive:false});
+pane.addEventListener('contextmenu',e=>e.preventDefault());
+document.getElementById('add').onclick=()=>{serial++;nodes.push({id:'n'+serial,x:150+serial*70,y:170,label:'새 공통 노드'});redraw();};
+document.getElementById('remove').onclick=()=>{for(let i=nodes.length-1;i>=0;i--)if(selected.has(nodes[i].id))nodes.splice(i,1);edges=edges.filter(e=>nodes.some(n=>n.id===e.source)&&nodes.some(n=>n.id===e.target));selected.clear();redraw();};
+redraw();
+</script></body></html>
