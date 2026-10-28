@@ -13,6 +13,9 @@ const stockMode=STOCK_MODE;
 const stockWorkflows=STOCK_WORKFLOWS;
 const stockFlow=ref(stockWorkflows[0][0]);
 const stockOriginal=ref(null);
+const stockServerVersion=ref(0);
+const stockServerState=ref('');
+const stockServerAvailable=ref(false);
 const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
 const paletteGroups=NODE_GROUPS;
@@ -213,13 +216,29 @@ async function openStockFlow(file){
  const stored=localStorage.getItem(storageKey());
  try{
    let data;
-   if(stored){
-     data=JSON.parse(stored);
-     if(!Array.isArray(data.nodes)||!Array.isArray(data.edges)||!data.original)throw Error('저장 데이터 손상');
-   }else{
+   let serverSource=false;
+   try{
+     const response=await fetch('/api/studio/workflows/'+file,{cache:'no-store',credentials:'same-origin'});
+     if(!response.ok)throw Error('서버 HTTP '+response.status);
+     const remote=await response.json();
+     if(!remote.workflow||!Number.isInteger(remote.version))throw Error('서버 응답 형식 오류');
+     stockServerVersion.value=remote.version;
+     stockServerAvailable.value=true;
+     serverSource=remote.source==='server';
+     stockServerState.value=serverSource?'서버 저장본':'원본';
+     data=fromN8nWorkflow(remote.workflow);
+   }catch(apiError){
+     stockServerAvailable.value=false;
+     stockServerVersion.value=0;
+     stockServerState.value='서버 연결 없음';
      const response=await fetch('/stock-workflows/'+file,{cache:'no-store'});
      if(!response.ok)throw Error('원본 워크플로 HTTP '+response.status);
      data=fromN8nWorkflow(await response.json());
+   }
+   // An old browser-only draft is recoverable until the first server save.
+   if(!serverSource && stored){
+     const local=JSON.parse(stored);
+     if(Array.isArray(local.nodes)&&Array.isArray(local.edges)&&local.original)data=local;
    }
    // VueFlow's initial internal nodes may still be synchronizing on mount.
    // Wait for its first actual paint before restoring a same-tab local draft;
@@ -233,7 +252,7 @@ async function openStockFlow(file){
    selectedNodeId.value=null;selectedEdgeId.value=null;
    history=[];historyIndex=-1;recordHistory();
    localStorage.setItem('shared-n8n-studio:investment:selected',file);
-   announce((stored?'저장된 편집본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개');
+   announce((serverSource?'서버 저장본':stored?'브라우저 복구본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개 · '+stockServerState.value);
    nextTick(()=>fitView({padding:.25,duration:150}));
  }catch(err){announce('워크플로 불러오기 실패: '+err.message);}
 }
@@ -250,9 +269,31 @@ function clearCanvas(){
   nodes.value=[];edges.value=[];selectedNodeId.value=null;selectedEdgeId.value=null;
   recordHistory();announce('캔버스를 비웠습니다');
 }
-function saveLocal(){
+async function saveLocal(){
   const payload={format:'shared-n8n-studio-playground/v1',workflowName:workflowName.value,template:template.value,nodes:nodes.value,edges:edges.value};
-  try{if(stockMode){payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';}localStorage.setItem(storageKey(),JSON.stringify(payload));localSavedAt.value=new Date().toLocaleTimeString('ko-KR');announce('이 브라우저에 저장했습니다 (서버 저장 아님)');}
+  if(stockMode){
+    // Convert back to real official n8n workflow data. Reject unsupported
+    // extension nodes rather than recording a misleading "successful save".
+    let workflow;
+    try{workflow=toN8nWorkflow({original:stockOriginal.value,nodes:nodes.value,edges:edges.value,workflowName:workflowName.value});}
+    catch(e){announce('서버 저장 불가: '+e.message);return;}
+    if(stockServerAvailable.value){
+      try{
+        const res=await fetch('/api/studio/workflows/'+stockFlow.value,{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({workflow,expectedVersion:stockServerVersion.value})});
+        const data=await res.json();
+        if(!res.ok){announce(res.status===409?'저장 충돌: 다른 탭에서 변경됨. 다시 불러와 주세요.':'서버 저장 실패: '+(data.error||res.status));return;}
+        stockServerVersion.value=data.version;
+        stockServerState.value='서버 v'+data.version;
+        payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';
+        localStorage.setItem(storageKey(),JSON.stringify(payload));
+        localSavedAt.value=new Date().toLocaleTimeString('ko-KR');
+        announce('서버 DB 저장 성공 · v'+data.version+' · 브라우저 백업 완료');
+        return;
+      }catch(e){announce('서버 연결 오류: '+e.message+' · 서버에는 저장되지 않았습니다');return;}
+    }
+    payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';
+  }
+  try{localStorage.setItem(storageKey(),JSON.stringify(payload));localSavedAt.value=new Date().toLocaleTimeString('ko-KR');announce(stockMode?'서버 미연결 · 브라우저에만 백업했습니다':'이 브라우저에 저장했습니다 (서버 저장 아님)');}
   catch(e){announce('브라우저 저장 실패: '+e.message);}
 }
 function importGraph(raw){
@@ -405,12 +446,12 @@ watch(()=>selectedNodeId.value,()=>{
             <button class="toolbar-btn" @click="fileInput?.click()" title="JSON 가져오기">⇧</button>
             <input ref="fileInput" type="file" accept=".json,application/json" class="visually-hidden" @change="onImport"/>
             <button class="toolbar-btn" @click="loadLocal" title="브라우저 저장값 불러오기">↺</button>
-            <button class="primary-btn" @click="saveLocal">▣ <span>{{stockMode?'투자 편집본 저장':'브라우저 저장'}}</span></button>
+            <button class="primary-btn" @click="saveLocal">▣ <span>{{stockMode?'서버 저장':'브라우저 저장'}}</span></button>
           </div>
         </div>
         <div class="canvas-info">
           <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?'Investment · 13개 실제 워크플로':'Editor playground'}}</b></div>
-          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?'실제 워크플로 보기·편집 · 실행 연결 전':'모의 데이터 전용'}}</span></div>
+          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?('DB '+(stockServerAvailable?'연결됨 · v'+stockServerVersion:'미연결')+' · 실행 비활성'):'모의 데이터 전용'}}</span></div>
         </div>
         <div class="canvas-holder" data-testid="canvas-holder" @dragover="onDragOver" @drop="onDrop">
           <VueFlow id="shared-studio-playground" v-model:nodes="nodes" v-model:edges="edges" :node-types="nodeTypes" :fit-view-on-init="true"
@@ -428,7 +469,7 @@ watch(()=>selectedNodeId.value,()=>{
         </div>
         <div class="bottom-bar">
           <span class="bottom-status"><span class="green-dot"></span>{{status}}</span>
-          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?'실제 n8n JSON · 서버 실행 연결 전':'No API connected'}}</span>
+          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?(stockServerAvailable?'SQLite 서버 저장 · 투자 실행 차단':'서버 미연결 · 브라우저 저장만 가능'):'No API connected'}}</span>
         </div>
       </section>
 
