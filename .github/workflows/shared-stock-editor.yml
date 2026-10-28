@@ -1,7 +1,7 @@
 name: Shared Stock Editor module build and adapter tests
 on:
   push:
-    branches: [feature/stock-integrated-editor-20261029]
+    branches: [feature/stock-integrated-editor-20261029, feature/shared-studio-server-db-20261029]
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -18,6 +18,8 @@ jobs:
         run: |
           node --test playground/tests/investment-adapter.test.mjs
           npm test
+      - name: Test reusable SQLite persistence server with real HTTP requests
+        run: python3 -m unittest discover -s server -p 'test_*.py' -v
       - name: Build stock configuration of shared editor
         env:
           VITE_EDITOR_PROJECT: investment
