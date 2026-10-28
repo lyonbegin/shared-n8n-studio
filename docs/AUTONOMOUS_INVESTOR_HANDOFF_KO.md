@@ -1,3 +1,11 @@
+## 50종 노드 계약 (추가 요구사항)
+
+공통 팔레트의 분류, 설정, 포트 규칙: [50종 노드 명세](./SHARED_NODE_50_SPEC_KO.md)  
+주식 기존 140 연산·12개 Python 엔진과 실제 연동 방법: [투자 어댑터 구현 지침](./INVESTMENT_NODE_ADAPTER_GUIDE_KO.md)
+
+`Business Operation` 한 종류로 `operation_id`를 선택하도록 구현하고, 나머지 실행/제어/관측 노드는 실제 공식 n8n node 또는 안전하게 검증된 확장에 대응시킵니다. 원본 Python 프로젝트와 실거래 차단을 유지합니다.
+
+
 # AUTONOMOUS-INVESTOR — 공통 n8n 편집기 도입 실행 지시서
 
 > 수신: `lyonbegin/autonomous-investor-backend` 프로젝트 작업 에이전트/개발자  
