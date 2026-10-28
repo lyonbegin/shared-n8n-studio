@@ -1,0 +1,31 @@
+name: shared n8n Pan Chromium interaction
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  browser-pan-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Playwright Chromium
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Real Chromium gestures on isolated fixture
+        run: python tests/browser/test_pan_chrome.py
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-n8n-pan-chromium-proof
+          path: |
+            tests/browser/chrome-pan-proof.png
+            tests/browser/chrome-test-results.json
+          if-no-files-found: warn
