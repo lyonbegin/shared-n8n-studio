@@ -134,11 +134,21 @@ class Handler(BaseHTTPRequestHandler):
         sid, new_cookie = self._sid()
         tail = unquote(path.removeprefix("/api/studio/workflows/"))
         is_versions = tail.endswith("/versions")
-        key = tail[:-len("/versions")] if is_versions else tail
+        revision_match = re.fullmatch(r"(.+)/versions/([1-9][0-9]*)", tail)
+        key = revision_match.group(1) if revision_match else tail[:-len("/versions")] if is_versions else tail
         try:
             fixture = fixture_path(key)
         except ValueError as e:
             return self._json(404, {"error": str(e)}, sid, new_cookie)
+        if revision_match:
+            if method != "GET":
+                return self._json(405, {"error": "허용되지 않는 메서드"}, sid, new_cookie)
+            rev = int(revision_match.group(2))
+            with db_connect() as db:
+                row = db.execute("SELECT payload, created_at FROM revisions WHERE sid=? AND path=? AND version=?", (sid, key, rev)).fetchone()
+            if not row:
+                return self._json(404, {"error": "버전 기록이 없습니다"}, sid, new_cookie)
+            return self._json(200, {"version": rev, "workflow": json.loads(row["payload"]), "createdAt": row["created_at"]}, sid, new_cookie)
         if is_versions:
             if method != "GET":
                 return self._json(405, {"error": "허용되지 않는 메서드"}, sid, new_cookie)
