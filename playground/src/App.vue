@@ -221,6 +221,12 @@ async function openStockFlow(file){
      if(!response.ok)throw Error('원본 워크플로 HTTP '+response.status);
      data=fromN8nWorkflow(await response.json());
    }
+   // VueFlow's initial internal nodes may still be synchronizing on mount.
+   // Wait for its first actual paint before restoring a same-tab local draft;
+   // otherwise the initial 5-node synthetic template can overwrite 6 real nodes.
+   await nextTick();
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   if(stockFlow.value!==file)return;
    stockOriginal.value=data.original;
    nodes.value=data.nodes;edges.value=data.edges;
    workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
