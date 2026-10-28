@@ -1,3 +1,13 @@
+## Shared 50-kind node library and implementation contracts
+
+- **[50 node kind specification (Korean)](docs/SHARED_NODE_50_SPEC_KO.md)** — 9 existing + 15 execution/control + 25 advanced control/verification/recovery + 1 Business Operation = 50.
+- [Stock investment adapter implementation guide](docs/INVESTMENT_NODE_ADAPTER_GUIDE_KO.md) — reuse actual `operation_id` catalog and 12 engine bridges.
+- [ProcureFlow adapter implementation guide](docs/PROCUREFLOW_NODE_ADAPTER_GUIDE_KO.md) — connect manifest `N/H/Q/S/P/R/O` 43 business blocks, PF00~PF15.
+- [Standalone 50-kind playground](https://shared-n8n-playground-production.up.railway.app/) — UI/port/parameter/sandbox simulation only.
+
+The 50-type UI catalog is `playground/src/node-catalog.js`; there are **14 native mappings, 7 composition recipes, and 29 proposed extensions**. Native execution/DB/API is not implemented by this fixture. The official n8n engine and project-specific adapters must run independently in approved test environments.
+
+
 # Shared n8n Studio · 공통 n8n 편집기
 
 **Source-based official n8n Vue canvas** shared by:
