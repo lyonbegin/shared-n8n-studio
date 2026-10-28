@@ -16,6 +16,7 @@ const stockOriginal=ref(null);
 const stockServerVersion=ref(0);
 const stockServerState=ref('');
 const stockServerAvailable=ref(false);
+const stockVersionRows=ref([]);
 const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
 const paletteGroups=NODE_GROUPS;
@@ -204,6 +205,31 @@ function applyNodeSettings(){
   }catch(e){announce('설정 JSON 오류: '+e.message);}
 }
 function applyEdgeSettings(){recordHistory();announce('연결선 설정을 변경했습니다');}
+async function refreshStockVersions(file=stockFlow.value){
+ if(!stockMode||!stockServerAvailable.value)return;
+ try{
+  const response=await fetch('/api/studio/workflows/'+file+'/versions',{cache:'no-store',credentials:'same-origin'});
+  if(!response.ok)throw Error('버전 목록 HTTP '+response.status);
+  const payload=await response.json();
+  if(stockFlow.value===file)stockVersionRows.value=Array.isArray(payload.versions)?payload.versions:[];
+ }catch(err){stockVersionRows.value=[];announce('변경 이력 조회 실패: '+err.message);}
+}
+async function restoreStockVersion(version){
+ if(!stockMode||!stockServerAvailable.value||!Number.isInteger(version))return;
+ if(!confirm('서버 버전 v'+version+'을 새 버전으로 복원합니까? 현재 미저장 수정은 유지되지 않습니다.'))return;
+ const file=stockFlow.value;
+ try{
+   const response=await fetch('/api/studio/workflows/'+file+'/versions/'+version,{cache:'no-store',credentials:'same-origin'});
+   if(!response.ok)throw Error('이전 버전을 읽지 못했습니다');
+   const previous=await response.json();
+   const saved=await fetch('/api/studio/workflows/'+file,{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({workflow:previous.workflow,expectedVersion:stockServerVersion.value})});
+   const result=await saved.json();
+   if(!saved.ok)throw Error(saved.status===409?'다른 탭에서 먼저 저장했습니다':result.error||'복원 실패');
+   localStorage.removeItem(storageKey());
+   await openStockFlow(file);
+   announce('이전 버전 v'+version+'을 서버 v'+result.version+'으로 복원했습니다');
+ }catch(err){announce('버전 복원 실패: '+err.message);}
+}
 async function openStockFlow(file){
  if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
  stockFlow.value=file;
@@ -229,6 +255,7 @@ async function openStockFlow(file){
      data=fromN8nWorkflow(remote.workflow);
    }catch(apiError){
      stockServerAvailable.value=false;
+     stockVersionRows.value=[];
      stockServerVersion.value=0;
      stockServerState.value='서버 연결 없음';
      const response=await fetch('/stock-workflows/'+file,{cache:'no-store'});
@@ -253,6 +280,7 @@ async function openStockFlow(file){
    history=[];historyIndex=-1;recordHistory();
    localStorage.setItem('shared-n8n-studio:investment:selected',file);
    announce((serverSource?'서버 저장본':stored?'브라우저 복구본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개 · '+stockServerState.value);
+   if(stockServerAvailable.value)await refreshStockVersions(file);
    nextTick(()=>fitView({padding:.25,duration:150}));
  }catch(err){announce('워크플로 불러오기 실패: '+err.message);}
 }
@@ -288,6 +316,7 @@ async function saveLocal(){
         localStorage.setItem(storageKey(),JSON.stringify(payload));
         localSavedAt.value=new Date().toLocaleTimeString('ko-KR');
         announce('서버 DB 저장 성공 · v'+data.version+' · 브라우저 백업 완료');
+        await refreshStockVersions();
         return;
       }catch(e){announce('서버 연결 오류: '+e.message+' · 서버에는 저장되지 않았습니다');return;}
     }
@@ -536,17 +565,26 @@ watch(()=>selectedNodeId.value,()=>{
           <div v-for="(ev,i) in events" :key="i" class="activity-item"><span class="activity-marker"></span><div><b>{{ev.text}}</b><small>{{ev.time}}</small></div></div>
         </div>
         <div class="right-bottom">
+          <div v-if="stockMode" data-testid="stock-version-history" style="padding:9px 4px 14px;border-bottom:1px solid #d8dfe8;margin-bottom:10px;">
+            <div style="font-weight:700;margin-bottom:8px;">서버 변경 이력 <small>최근 {{stockVersionRows.length}}개 · 현재 v{{stockServerVersion}}</small></div>
+            <p v-if="!stockServerAvailable" style="font-size:12px;">서버 연결이 없어 이력을 볼 수 없습니다.</p>
+            <p v-else-if="!stockVersionRows.length" style="font-size:12px;">저장된 서버 버전이 없습니다.</p>
+            <div v-for="entry in stockVersionRows.slice(0,5)" :key="entry.version" style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin:5px 0;">
+              <span>v{{entry.version}} <small>{{entry.created_at?.slice(0,16)}}</small></span>
+              <button class="toolbar-btn" :data-restore-version="entry.version" @click="restoreStockVersion(entry.version)">복원</button>
+            </div>
+          </div>
           <div class="run-title"><div><strong>{{stockMode?'실행 엔진 상태':'Test execution'}}</strong><small>{{stockMode?'공통 UI에 실제 실행 서버는 미연결 · 실제 주문 불가':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
           <button v-if="!stockMode" class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
-          <button class="run-reset" @click="resetRun">실행 표시 초기화</button>
+          <button v-if="!stockMode" class="run-reset" @click="resetRun">실행 표시 초기화</button>
         </div>
       </aside>
     </div>
     <div v-if="showHelp" class="help-overlay" @click.self="showHelp=false"><div class="help-dialog">
-      <button class="help-close" @click="showHelp=false">×</button><span class="help-kicker">INTERACTION GUIDE</span><h2>50종 노드 계약 플레이그라운드</h2>
-      <p>공통 50종 노드의 팔레트·설정·포트 연결을 시험하는 별도 Vue Flow 프론트입니다. 공식 n8n 엔진과 실제 투자·조달 API에는 연결되지 않았습니다.</p>
+      <button class="help-close" @click="showHelp=false">×</button><span class="help-kicker">INTERACTION GUIDE</span><h2>{{stockMode?'주식 자동화 · 공통 n8n 편집기':'50종 노드 계약 플레이그라운드'}}</h2>
+      <p>{{stockMode?'주식 프로젝트의 실제 13개 n8n JSON을 공통 UI에서 편집하고 서버 DB에 저장할 수 있습니다. 실제 투자 주문 실행은 연결하지 않았습니다.':'공통 50종 노드의 팔레트·설정·포트 연결을 시험하는 별도 Vue Flow 프론트입니다. 공식 n8n 엔진과 실제 투자·조달 API에는 연결되지 않았습니다.'}}</p>
       <div class="help-grid"><div><b>01 / Pan</b><span>빈 캔버스 왼쪽/가운데 드래그</span></div><div><b>02 / Select</b><span>Shift + 드래그 / 노드 클릭</span></div><div><b>03 / Edit</b><span>노드 추가·이동·삭제·연결</span></div><div><b>04 / Save</b><span>브라우저 저장 / JSON 내보내기</span></div></div>
-      <div class="help-caution">모의 실행, 브라우저 저장 및 예제 데이터만 포함됩니다. n8n 서버 저장·실제 노드 실행 검증은 별도 단계입니다.</div>
+      <div class="help-caution">{{stockMode?'서버 SQLite 저장은 브라우저별 익명 초안입니다. 다른 기기에서 동일 초안에 접근하려면 로그인 연동이 필요합니다. 실제 n8n 실행 엔진은 연결 전입니다.':'모의 실행, 브라우저 저장 및 예제 데이터만 포함됩니다. n8n 서버 저장·실제 노드 실행 검증은 별도 단계입니다.'}}</div>
       <button class="primary-btn" @click="showHelp=false">테스트 시작</button>
     </div></div>
   </div>
