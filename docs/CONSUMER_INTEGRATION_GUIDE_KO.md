@@ -1,3 +1,12 @@
+## 노드 라이브러리 50종 도입 기준
+
+- [50종 노드 계약 전체 표 / 네이티브·조합·확장 구분](./SHARED_NODE_50_SPEC_KO.md)
+- [투자 실행 어댑터 실제 코딩 지침](./INVESTMENT_NODE_ADAPTER_GUIDE_KO.md)
+- [ProcureFlow 실행 어댑터 실제 코딩 지침](./PROCUREFLOW_NODE_ADAPTER_GUIDE_KO.md)
+
+이 노드 카탈로그는 **플레이그라운드에서 실제로 선택·배치·설정·연결 가능**한 UI 계약이며, 실제 n8n 실행 패키지 설치·업무 API 연결·서버 영속 저장은 담당 프로젝트의 별도 구현/검증 범위입니다. 기존 두 프로젝트와 Railway 운영 서비스는 변경하지 않습니다.
+
+
 # 공통 n8n 편집기 도입 지침서 — 두 프로젝트 공통
 
 > 작성일: 2026-10-28 · 공식 공통 저장소: https://github.com/lyonbegin/shared-n8n-studio  
