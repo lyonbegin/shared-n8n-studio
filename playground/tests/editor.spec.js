@@ -32,11 +32,11 @@ test('node inspector edit, JSON params, delete',async({page})=>{
 test('canvas left mouse drag pans viewport',async({page})=>{
   const pane=page.locator('.vue-flow__pane'),viewport=page.locator('.vue-flow__viewport');
   const rect=await pane.boundingBox();
-  const before=await viewport.getAttribute('transform');
+  const before=await viewport.evaluate(el=>getComputedStyle(el).transform);
   const p={x:rect.x+rect.width*.55,y:rect.y+rect.height*.88};
   await page.mouse.move(p.x,p.y);await page.mouse.down();
   await page.mouse.move(p.x+150,p.y-65,{steps:10});await page.mouse.up();
-  const after=await viewport.getAttribute('transform');
+  const after=await viewport.evaluate(el=>getComputedStyle(el).transform);
   expect(after).not.toBe(before);
 });
 test('node drag changes graph node position',async({page})=>{
@@ -49,9 +49,9 @@ test('node drag changes graph node position',async({page})=>{
 });
 test('zoom buttons and local browser save load',async({page})=>{
   const viewport=page.locator('.vue-flow__viewport');
-  const before=await viewport.getAttribute('transform');
+  const before=await viewport.evaluate(el=>getComputedStyle(el).transform);
   await page.getByRole('button',{name:'확대',exact:true}).first().click();
-  await expect.poll(()=>viewport.getAttribute('transform')).not.toBe(before);
+  await expect.poll(()=>viewport.evaluate(el=>getComputedStyle(el).transform)).not.toBe(before);
   await page.getByRole('button',{name:'브라우저 저장'}).click();
   await expect(page.getByText(/이 브라우저에 저장했습니다/)).toBeVisible();
   await page.reload();
