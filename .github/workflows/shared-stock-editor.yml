@@ -1,7 +1,7 @@
 name: Shared Stock Editor module build and adapter tests
 on:
   push:
-    branches: [feature/stock-integrated-editor-20261029]
+    branches: [feature/stock-integrated-editor-20261029, feature/shared-studio-server-db-20261029]
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
