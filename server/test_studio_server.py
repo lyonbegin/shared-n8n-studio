@@ -89,6 +89,20 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(conflict["currentVersion"],1)
         _,history=self.call(ENDPOINT+"/versions",opener=browser)
         self.assertEqual(history["versions"][0]["version"],1)
+        status,past=self.call(ENDPOINT+"/versions/1",opener=browser)
+        self.assertEqual(status,200)
+        self.assertEqual(past["version"],1)
+        self.assertEqual(past["workflow"]["nodes"][1]["position"],[800,330])
+        status,unknown=self.call(ENDPOINT+"/versions/999",opener=browser)
+        self.assertEqual(status,404)
+        # Historical revision is restored by a new versioned PUT, not overwriting the audit log.
+        restored=json.loads(json.dumps(past["workflow"]))
+        restored["nodes"][1]["position"]=[400,200]
+        status,reinstated=self.call(ENDPOINT,"PUT",{"expectedVersion":1,"workflow":restored},browser)
+        self.assertEqual(status,200)
+        self.assertEqual(reinstated["version"],2)
+        _,rechecked=self.call(ENDPOINT,opener=browser)
+        self.assertEqual(rechecked["workflow"]["nodes"][1]["position"],[400,200])
         # A browser without this cookie must not read private drafts.
         _,fresh=self.call(ENDPOINT,opener=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar())))
         self.assertEqual(fresh["version"],0)
@@ -97,8 +111,8 @@ class ServerTest(unittest.TestCase):
         self.proc.wait(timeout=10)
         self.start()
         _,persisted=self.call(ENDPOINT,opener=browser)
-        self.assertEqual(persisted["version"],1)
-        self.assertEqual(persisted["workflow"]["nodes"][1]["position"],[800,330])
+        self.assertEqual(persisted["version"],2)
+        self.assertEqual(persisted["workflow"]["nodes"][1]["position"],[400,200])
 
     def test_invalid_graph_and_activation_are_rejected_or_sanitized(self):
         browser=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
