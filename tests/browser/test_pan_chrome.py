@@ -5,6 +5,8 @@ This is NOT a post-build verification of deployed upstream n8n.
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 import json
+import os
+import shutil
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -19,7 +21,11 @@ def drag(page, start, end, button="left", steps=8):
 def main():
     results = {}
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, executable_path="/usr/bin/chromium", args=["--no-sandbox"])
+        chrome = os.environ.get("CHROME_PATH") or shutil.which("chromium")
+        launch_options = {"headless": True, "args": ["--no-sandbox"]}
+        if chrome:
+            launch_options["executable_path"] = chrome
+        browser = p.chromium.launch(**launch_options)
         page = browser.new_page(viewport={"width": 1440, "height": 920}, device_scale_factor=1)
         html = (ROOT / "tests/browser/pan_harness.html").read_text(encoding="utf8")
         contract = (ROOT / "packages/pan/pan-contract.mjs").read_text(encoding="utf8").replace(
