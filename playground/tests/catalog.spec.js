@@ -55,7 +55,7 @@ test('Business Operation has real configurable API, Python, Code, Workflow and M
   await page.locator('[data-setting="adapter"]').selectOption('procureflow');
   await page.locator('[data-setting="operationId"]').fill('H05');
   await page.locator('[data-setting="operationId"]').blur();
-  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toContainText('H05');
+  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toHaveValue(/H05/);
   await page.getByRole('button',{name:'브라우저 저장'}).click();
   await page.reload();
   await page.locator('button[title="브라우저 저장값 불러오기"]').click();
@@ -69,12 +69,12 @@ test('Business Operation has real configurable API, Python, Code, Workflow and M
 test('IF, approvals and quorum use distinct named source port handles',async({page})=>{
   const ifNode=page.locator('.vue-flow__node').filter({hasText:'조건 확인'});
   await expect(ifNode.locator('.port-out')).toHaveCount(2);
-  await expect(ifNode.locator('.port-out[id="true"]')).toHaveCount(1);
-  await expect(ifNode.locator('.port-out[id="false"]')).toHaveCount(1);
+  await expect(ifNode.locator('.port-out[data-handleid="true"]')).toHaveCount(1);
+  await expect(ifNode.locator('.port-out[data-handleid="false"]')).toHaveCount(1);
   await page.getByRole('textbox',{name:'노드 검색'}).fill('Human Approval');
   await page.locator('[data-node-kind="approval"]').click();
   await expect(page.locator('.vue-flow__node').last().locator('.port-out')).toHaveCount(3);
-  await expect(page.locator('.vue-flow__node').last().locator('.port-out[id="approved"]')).toHaveCount(1);
+  await expect(page.locator('.vue-flow__node').last().locator('.port-out[data-handleid="approved"]')).toHaveCount(1);
 });
 
 test('new node kind settings are validated and rejected when malformed',async({page})=>{
@@ -84,9 +84,9 @@ test('new node kind settings are validated and rejected when malformed',async({p
   await expect(input).toHaveValue('10');
   await input.fill('-1');await input.blur();
   await expect(page.locator('.bottom-status')).toContainText('invalid number');
-  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toContainText('"limit": 10');
+  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toHaveValue(/"limit": 10/);
   await input.fill('24');await input.blur();
-  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toContainText('"limit": 24');
+  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toHaveValue(/"limit": 24/);
 });
 
 test('investment and procurement sample workflows now include business operation and control gates',async({page})=>{
