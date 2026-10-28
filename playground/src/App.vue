@@ -277,7 +277,18 @@ function exportJson(){
 }
 async function onImport(event){
   const f=event.target.files?.[0];if(!f)return;
-  try{importGraph(JSON.parse(await f.text()));announce('JSON 워크플로를 가져왔습니다 (모의 데이터)');}
+  try{
+    const raw=JSON.parse(await f.text());
+    if(stockMode){
+      const converted=fromN8nWorkflow(raw);
+      stockOriginal.value=converted.original;nodes.value=converted.nodes;edges.value=converted.edges;
+      workflowName.value=converted.workflowName;recordHistory();
+      nextTick(()=>fitView({padding:.24,duration:200}));
+      announce('원본 n8n JSON 가져오기 완료 · '+nodes.value.length+'개 노드');
+    }else{
+      importGraph(raw);announce('JSON 워크플로를 가져왔습니다 (모의 데이터)');
+    }
+  }
   catch(e){announce('가져오기 실패: '+e.message);}
   event.target.value='';
 }
