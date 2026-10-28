@@ -1,3 +1,4 @@
+import {parse as parseFlatted} from 'flatted';
 /**
  * Import REAL n8n execution-result JSON (exported by the official runtime).
  * Read-only; no fake execution, API calls, Python engines or brokerage actions.
@@ -27,7 +28,7 @@ function executionData(source){
  if(typeof data==='string'){
   // Exporters should unpack official n8n flatted serialized data into a JSON
   // object beforehand, rather than interpreting serialized strings as a run.
-  try{data=JSON.parse(data)}catch{throw Error('실행 data를 JSON 객체로 변환한 뒤 가져오세요');}
+  try{data=parseFlatted(data)}catch{try{data=JSON.parse(data)}catch{throw Error('실행 data JSON 해석에 실패했습니다');}}
  }
  if(Array.isArray(data))throw Error('배열 형식 실행 data는 지원하지 않습니다');
  if(!data||typeof data!=='object')throw Error('실행 결과 데이터가 없습니다');
