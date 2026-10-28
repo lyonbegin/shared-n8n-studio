@@ -140,7 +140,7 @@ export const getNode=(kind)=>NODE_BY_KIND[kind];
 export function defaultParameters(kind){
   const spec=getNode(kind);
   if(!spec)throw Error("Unknown node kind: "+kind);
-  return Object.fromEntries(spec.fields.map(f=>[f.key,f.default!==undefined?JSON.parse(JSON.stringify(f.default)):f.type==="boolean"?false:f.type==="number"?0:f.type==="json"?{}:""]));
+  return Object.fromEntries(spec.fields.map(f=>[f.key,f.default!==undefined?JSON.parse(JSON.stringify(f.default)):f.type==="select"?(f.options?.[0]?.value||""):f.type==="boolean"?false:f.type==="number"?0:f.type==="json"?{}:""]));
 }
 export function visibleFields(spec,params){
   return spec.fields.filter(f=>!spec.fieldVisibility[f.key] || spec.fieldVisibility[f.key]===params?.executionMode);
