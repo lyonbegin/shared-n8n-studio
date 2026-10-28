@@ -1,3 +1,12 @@
+## 50-type catalog and implementation
+
+The live playground displays **50 node-kind UI contracts** (14 official n8n node mappings, 7 existing-node compositions and 29 adapters/extensions awaiting actual project implementation). Use the category filter/search, choose a node, and edit its type-specific parameters. Business Operation supports Code/API/Python/Workflow/Mock settings and named success/error ports. Branches such as IF/Human Approval have named outputs. This visual editor **does not execute** Code/Python/API against business backends.
+
+- [Full 50 node specifications](../docs/SHARED_NODE_50_SPEC_KO.md)
+- [Investment adapter guide](../docs/INVESTMENT_NODE_ADAPTER_GUIDE_KO.md)
+- [ProcureFlow adapter guide](../docs/PROCUREFLOW_NODE_ADAPTER_GUIDE_KO.md)
+
+
 # Independent Canvas Playground
 
 Fully isolated front-end for exercising **Pan / Zoom / node add-delete-move / edge connect / settings / local save / import-export / undo-redo** in the shared editor project.
