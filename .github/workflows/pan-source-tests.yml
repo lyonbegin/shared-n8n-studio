@@ -1,0 +1,24 @@
+name: shared n8n Pan source tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  pan-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
+      - name: Check the official pinned n8n source signatures
+        run: |
+          for version in 2.44.5 2.44.6; do
+            curl --fail --location --silent --show-error \
+              "https://raw.githubusercontent.com/n8n-io/n8n/n8n%40${version}/packages/frontend/editor-ui/src/features/workflows/canvas/components/Canvas.vue" \
+              --output "/tmp/Canvas-${version}.vue"
+            node scripts/apply-pan-patch.mjs "/tmp/Canvas-${version}.vue" --check
+          done

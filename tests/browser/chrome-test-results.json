@@ -1,0 +1,14 @@
+{
+  "results": {
+    "left_pane_pan": "PASS",
+    "middle_pane_pan": "PASS",
+    "shift_drag_range_selection": "PASS",
+    "node_drag_is_not_pan": "PASS",
+    "handle_drag_connection": "PASS",
+    "add_node": "PASS",
+    "delete_selected_node": "PASS",
+    "wheel_zoom": "PASS"
+  },
+  "chrome_user_interaction": true,
+  "scope": "local_contract_fixture_not_upstream_n8n"
+}
