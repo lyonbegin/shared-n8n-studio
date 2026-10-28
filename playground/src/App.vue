@@ -4,36 +4,27 @@ import {VueFlow, Handle, Position, MarkerType, useVueFlow} from '@vue-flow/core'
 import {Background} from '@vue-flow/background';
 import {Controls} from '@vue-flow/controls';
 import {MiniMap} from '@vue-flow/minimap';
+import {NODE_CATALOG,NODE_GROUPS,NODE_BY_KIND,defaultParameters,visibleFields,validateParameters} from './node-catalog.js';
 
 const STORAGE_KEY='shared-n8n-studio:playground:v1';
-const palette=[
-  {kind:'trigger',name:'Manual Trigger',group:'트리거',icon:'▶',color:'#ec6384',description:'수동 시작'},
-  {kind:'schedule',name:'Schedule',group:'트리거',icon:'◷',color:'#ec6384',description:'일정 기반 실행'},
-  {kind:'webhook',name:'Webhook',group:'트리거',icon:'⌁',color:'#ec6384',description:'이벤트 수신 (모의)'},
-  {kind:'http',name:'HTTP Request',group:'처리',icon:'↗',color:'#4d8ee7',description:'외부 요청 설정 (모의)'},
-  {kind:'code',name:'Code',group:'처리',icon:'{ }',color:'#27aa99',description:'데이터 변환 (모의)'},
-  {kind:'set',name:'Edit Fields',group:'처리',icon:'≡',color:'#27aa99',description:'필드 편집'},
-  {kind:'if',name:'IF',group:'논리',icon:'◇',color:'#e6a640',description:'조건에 따른 분기'},
-  {kind:'merge',name:'Merge',group:'논리',icon:'⋈',color:'#a28aea',description:'분기 합류'},
-  {kind:'wait',name:'Wait',group:'논리',icon:'◴',color:'#a28aea',description:'지연 단계'},
-];
-const paletteGroups=['트리거','처리','논리'];
-const paletteMap=Object.fromEntries(palette.map(item=>[item.kind,item]));
+const palette=NODE_CATALOG;
+const paletteGroups=NODE_GROUPS;
+const paletteMap=NODE_BY_KIND;
 let counter=10, edgeCounter=10;
 const newId=()=> 'node_'+(++counter);
 const edgeId=()=> 'edge_'+(++edgeCounter);
 const makeNode=(id,kind,label,x,y,extra={})=>({
   id,type:'studio',position:{x,y},data:{
     kind,label,description:paletteMap[kind]?.description||'',state:'idle',
-    parameters:{...extra},disabled:false
+    parameters:{...defaultParameters(kind),...extra},disabled:false
   }
 });
 const makeEdge=(source,target)=>({id:edgeId(),source,target,type:'smoothstep',markerEnd:MarkerType.ArrowClosed,style:{stroke:'#97a9bd',strokeWidth:2}});
 function makeTemplate(type){
   const texts={
     common:[['trigger','워크플로 시작'],['http','데이터 요청'],['if','조건 확인'],['code','결과 처리'],['wait','재시도 대기']],
-    investment:[['webhook','TradingView 이벤트'],['code','전략 신호 분석'],['if','위험 기준 검사'],['set','연구 결과 기록'],['wait','시장 데이터 대기']],
-    procurement:[['schedule','공고 조회 시작'],['http','공고 자료 수집'],['if','증빙 조건 확인'],['set','심사 결과 정리'],['wait','응답 대기']]
+    investment:[['webhook','TradingView 이벤트'],['business-operation','투자 Python 엔진 실행'],['join-quorum','분석 결과 합류'],['approval','운용 승인 대기'],['evidence-audit','독립 감사 기록']],
+    procurement:[['schedule','공고 조회 시작'],['business-operation','G2B 개찰 수집'],['completeness','10년 수집 완전성'],['approval','참가 승인 대기'],['evidence-audit','공식 증빙 기록']]
   };
   const rows=texts[type]||texts.common;
   const positions=[[110,170],[400,170],[690,170],[1000,170],[705,390]];
@@ -51,7 +42,7 @@ const NodeCard=defineComponent({
         'data-testid':'studio-node','data-node-id':props.id,
         style:{'--node-accent':meta.color}
       },[
-        h(Handle,{type:'target',position:Position.Left,class:'port port-in'}),
+        ...((meta.inputs||['main']).map((port,i)=>h(Handle,{type:'target',position:Position.Left,id:port,class:'port port-in',title:'입력: '+port,style:{top:((i+1)/(meta.inputs.length+1)*100)+'%'}}))),
         h('div',{class:'node-header'},[
           h('span',{class:'node-icon'},meta.icon),
           h('span',{class:'node-meta'},[
@@ -65,7 +56,7 @@ const NodeCard=defineComponent({
           h('span',props.data.state==='running'?'실행 중':props.data.state==='success'?'모의 성공': '준비됨'),
           h('span',{class:'node-id'},props.id.replace(/^demo_.+?_/, '#'))
         ]),
-        h(Handle,{type:'source',position:Position.Right,class:'port port-out'})
+        ...((meta.outputs||['main']).map((port,i)=>h(Handle,{type:'source',position:Position.Right,id:port,class:'port port-out',title:'출력: '+port,style:{top:((i+1)/(meta.outputs.length+1)*100)+'%'}})))
       ]);
     };
   }
@@ -92,7 +83,14 @@ const nodeCount=computed(()=>nodes.value.length);
 const edgeCount=computed(()=>edges.value.length);
 const selectedNode=computed(()=>nodes.value.find(n=>n.id===selectedNodeId.value)||null);
 const selectedEdge=computed(()=>edges.value.find(e=>e.id===selectedEdgeId.value)||null);
-const filteredPalette=computed(()=>palette.filter(x=>(x.name+' '+x.kind+' '+x.description).toLowerCase().includes(search.value.toLowerCase())));
+const selectedSpec=computed(()=>selectedNode.value?paletteMap[selectedNode.value.data.kind]:null);
+const selectedFields=computed(()=>selectedSpec.value?visibleFields(selectedSpec.value,selectedNode.value?.data.parameters||{}):[]);
+const catalogStats=computed(()=>({
+ native:palette.filter(p=>p.implementation==='native').length,
+ composite:palette.filter(p=>p.implementation==='composite').length,
+ extension:palette.filter(p=>p.implementation==='extension').length
+}));
+const filteredPalette=computed(()=>palette.filter(x=>(x.name+' '+x.kind+' '+x.description+' '+x.group+' '+(x.nativeType||'')).toLowerCase().includes(search.value.toLowerCase())));
 const canUndo=ref(false),canRedo=ref(false);
 let history=[],historyIndex=-1,suspendHistory=false;
 function snapshot(){return JSON.stringify({nodes:nodes.value,edges:edges.value,name:workflowName.value,template:template.value});}
@@ -127,7 +125,7 @@ function onConnect(connection){
   if(!connection.source||!connection.target||connection.source===connection.target)return;
   if(edges.value.some(e=>e.source===connection.source&&e.target===connection.target&&e.sourceHandle===connection.sourceHandle&&e.targetHandle===connection.targetHandle))return;
   edges.value=[...edges.value,{...makeEdge(connection.source,connection.target),sourceHandle:connection.sourceHandle,targetHandle:connection.targetHandle}];
-  recordHistory();announce('연결선을 만들었습니다');
+  recordHistory();announce('연결선을 만들었습니다 · '+(connection.sourceHandle||'main')+' → '+(connection.targetHandle||'main'));
 }
 function onNodeDragStop(){recordHistory();announce('노드 위치 변경');}
 function addNode(kind,position){
@@ -135,7 +133,7 @@ function addNode(kind,position){
   const p=position||{x:180+(nodes.value.length%3)*245,y:185+Math.floor(nodes.value.length/3)*165};
   const n=makeNode(newId(),kind,label,Math.round(p.x),Math.round(p.y));
   nodes.value=[...nodes.value,n];selectedNodeId.value=n.id;selectedEdgeId.value=null;
-  inspectorJson.value='{}';
+  inspectorJson.value=JSON.stringify(n.data.parameters,null,2);
   recordHistory();announce(label+' 노드 추가');
 }
 function onPaletteDragStart(event,kind){event.dataTransfer.setData('application/x-shared-studio-node',kind);event.dataTransfer.effectAllowed='copy';}
@@ -164,6 +162,23 @@ function onKeyDown(event){
   if(event.key==='Delete'||event.key==='Backspace'){event.preventDefault();deleteSelected();}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();if(event.shiftKey)redo();else undo();}
 }
+function displayParameter(field){
+  const value=selectedNode.value?.data.parameters?.[field.key];
+  if(value===null||value===undefined)return '';
+  return field.type==='json'?JSON.stringify(value,null,2):String(value);
+}
+function updateParameter(field,raw){
+  if(!selectedNode.value)return;
+  try{
+    const value=field.type==='json'?JSON.parse(raw):field.type==='number'?Number(raw):field.type==='boolean'?Boolean(raw):raw;
+    const next={...selectedNode.value.data.parameters,[field.key]:value};
+    const errors=validateParameters(selectedNode.value.data.kind,next);
+    if(errors.length)throw Error(errors.join('; '));
+    selectedNode.value.data.parameters=next;
+    inspectorJson.value=JSON.stringify(next,null,2);
+    recordHistory();announce(field.label+' 설정 변경');
+  }catch(e){announce('설정 오류: '+e.message);}
+}
 function applyNodeSettings(){
   const n=selectedNode.value;
   if(!n)return;
@@ -171,7 +186,9 @@ function applyNodeSettings(){
   try{
     const parsed=JSON.parse(inspectorJson.value);
     if(!parsed||Array.isArray(parsed)||typeof parsed!=='object')throw Error('JSON 객체가 필요합니다');
-    n.data.parameters=parsed;
+    const errors=validateParameters(n.data.kind,parsed);
+    if(errors.length)throw Error(errors.join('; '));
+    n.data.parameters={...defaultParameters(n.data.kind),...parsed};
     recordHistory();announce('노드 설정을 적용했습니다');
   }catch(e){announce('설정 JSON 오류: '+e.message);}
 }
