@@ -315,9 +315,9 @@ watch(()=>selectedNodeId.value,()=>{
       <div class="brand">
         <div class="brand-mark"><span></span><span></span><span></span><span></span></div>
         <div class="brand-text"><strong>n8n <em>Studio</em></strong><small>SHARED EDITOR LAB</small></div>
-        <span class="brand-divider"></span><span class="brand-trailing">Playground</span>
+        <span class="brand-divider"></span><span class="brand-trailing">{{stockMode?'투자 자동화 · 공통 편집기':'Playground'}}</span>
       </div>
-      <div class="environment"><span class="pulse-dot"></span> 독립 테스트 환경 <span class="env-separator">/</span> <b>LOCAL ONLY</b></div>
+      <div class="environment"><span class="pulse-dot"></span> {{stockMode?'주식 자동화 · 공통 n8n 모듈':'독립 테스트 환경'}} <span class="env-separator">/</span> <b>{{stockMode?'편집·데이터 어댑터':'LOCAL ONLY'}}</b></div>
       <div class="top-actions">
         <button class="icon-btn outline" title="도움말" aria-label="도움말" @click="showHelp=!showHelp">?</button>
         <a class="github-link" href="https://github.com/lyonbegin/shared-n8n-studio" target="_blank" rel="noopener">GitHub <span>↗</span></a>
@@ -327,11 +327,16 @@ watch(()=>selectedNodeId.value,()=>{
       <aside class="left-panel">
         <div class="section-overline">WORKSPACE</div>
         <div class="project-tile">
-          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>Canvas interaction test</small></div><span class="project-menu">•••</span>
+          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>{{stockMode?'Investment · 실제 13개 워크플로':'Canvas interaction test'}}</small></div><span class="project-menu">•••</span>
         </div>
         <div class="sidebar-separator"></div>
-        <div class="section-heading"><b>샘플 워크플로</b><small>03</small></div>
-        <div class="sample-list">
+        <div class="section-heading"><b>{{stockMode?'투자 자동화 워크플로':'샘플 워크플로'}}</b><small>{{stockMode?13:3}}</small></div>
+        <div v-if="stockMode" class="sample-list" data-testid="stock-workflows">
+          <button v-for="[file,label] in stockWorkflows" :key="file" class="sample-item" :class="{active:stockFlow===file}" :data-stock-flow="file" @click="openStockFlow(file)">
+            <span class="sample-icon">↗</span><span><b>{{label}}</b><small>{{file.startsWith('operations')?'운영 워크플로':'시나리오 테스트'}}</small></span><span class="sample-chevron">›</span>
+          </button>
+        </div>
+        <div v-else class="sample-list">
           <button class="sample-item" :class="{active:template==='common'}" @click="changeTemplate('common')"><span class="sample-icon">◈</span><span><b>공통 기능 테스트</b><small>Basic canvas</small></span><span class="sample-chevron">›</span></button>
           <button class="sample-item" :class="{active:template==='investment'}" @click="changeTemplate('investment')"><span class="sample-icon">↗</span><span><b>주식 자동화</b><small>Investment sample</small></span><span class="sample-chevron">›</span></button>
           <button class="sample-item" :class="{active:template==='procurement'}" @click="changeTemplate('procurement')"><span class="sample-icon">▤</span><span><b>ProcureFlow</b><small>Procurement sample</small></span><span class="sample-chevron">›</span></button>
@@ -354,7 +359,7 @@ watch(()=>selectedNodeId.value,()=>{
           </template>
           <p v-if="!filteredPalette.length" class="empty-search">해당하는 노드가 없습니다.</p>
         </div>
-        <div class="sidebar-foot"><span class="keycaps">SPACE</span> Pan <span class="keycaps">SHIFT</span> Select</div>
+        <div class="sidebar-foot"><span class="keycaps">좌측 드래그</span> Pan <span class="keycaps">SHIFT</span> Select</div>
       </aside>
 
       <section class="main-column">
@@ -372,12 +377,12 @@ watch(()=>selectedNodeId.value,()=>{
             <button class="toolbar-btn" @click="fileInput?.click()" title="JSON 가져오기">⇧</button>
             <input ref="fileInput" type="file" accept=".json,application/json" class="visually-hidden" @change="onImport"/>
             <button class="toolbar-btn" @click="loadLocal" title="브라우저 저장값 불러오기">↺</button>
-            <button class="primary-btn" @click="saveLocal">▣ <span>브라우저 저장</span></button>
+            <button class="primary-btn" @click="saveLocal">▣ <span>{{stockMode?'투자 편집본 저장':'브라우저 저장'}}</span></button>
           </div>
         </div>
         <div class="canvas-info">
-          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>Editor playground</b></div>
-          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● 모의 데이터 전용</span></div>
+          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?'Investment · 13개 실제 워크플로':'Editor playground'}}</b></div>
+          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?'실제 워크플로 보기·편집 · 실행 연결 전':'모의 데이터 전용'}}</span></div>
         </div>
         <div class="canvas-holder" data-testid="canvas-holder" @dragover="onDragOver" @drop="onDrop">
           <VueFlow id="shared-studio-playground" v-model:nodes="nodes" v-model:edges="edges" :node-types="nodeTypes" :fit-view-on-init="true"
@@ -390,12 +395,12 @@ watch(()=>selectedNodeId.value,()=>{
             <Controls position="bottom-left" :show-interactive="false"/>
             <MiniMap position="bottom-right" :node-color="n=>paletteMap[n.data.kind]?.color||'#8c9fb2'" :mask-color="'rgba(238,244,250,.72)'"/>
           </VueFlow>
-          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> PLAYGROUND</div>
+          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> {{stockMode?'INVESTMENT':'PLAYGROUND'}}</div>
           <div class="canvas-controls-hint">좌클릭 드래그: 화면 이동 <span>·</span> Shift + 드래그: 다중 선택 <span>·</span> 노드 핸들: 연결</div>
         </div>
         <div class="bottom-bar">
           <span class="bottom-status"><span class="green-dot"></span>{{status}}</span>
-          <span class="bottom-right"><span>Vue Flow · Standalone</span><span class="bottom-divider"></span> No API connected</span>
+          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?'실제 n8n JSON · 서버 실행 연결 전':'No API connected'}}</span>
         </div>
       </section>
 
@@ -462,8 +467,8 @@ watch(()=>selectedNodeId.value,()=>{
           <div v-for="(ev,i) in events" :key="i" class="activity-item"><span class="activity-marker"></span><div><b>{{ev.text}}</b><small>{{ev.time}}</small></div></div>
         </div>
         <div class="right-bottom">
-          <div class="run-title"><div><strong>Test execution</strong><small>외부 API·실거래 없이 화면만 시뮬레이션</small></div><span class="run-icon">◉</span></div>
-          <button class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
+          <div class="run-title"><div><strong>{{stockMode?'실행 엔진 상태':'Test execution'}}</strong><small>{{stockMode?'공통 UI에 실제 실행 서버는 미연결 · 실제 주문 불가':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
+          <button v-if="!stockMode" class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
           <button class="run-reset" @click="resetRun">실행 표시 초기화</button>
         </div>
       </aside>
