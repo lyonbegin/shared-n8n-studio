@@ -18,6 +18,8 @@ jobs:
         run: |
           node --test playground/tests/investment-adapter.test.mjs
           npm test
+      - name: Test reusable SQLite persistence server with real HTTP requests
+        run: python3 -m unittest discover -s server -p 'test_*.py' -v
       - name: Build stock configuration of shared editor
         env:
           VITE_EDITOR_PROJECT: investment
