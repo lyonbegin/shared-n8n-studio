@@ -137,6 +137,84 @@
 
 `approved/rejected/timeout`, `true/false`, `complete/incomplete`, `joined/insufficient` 등의 이름 붙은 포트를 플레이그라운드에서 선택·연결할 수 있습니다. **실제 n8n 출력 인덱스/파라미터로 변환하는 단계는 각 타입 어댑터 개발 대상**입니다. 플레이그라운드의 JSON은 **n8n 워크플로 실행 파일과 동일하지 않습니다.**
 
+## 3.4 공통 코드를 실제로 가져다 쓰는 방법
+
+각 프로젝트는 **공통 저장소의 검증된 커밋 SHA를 고정**하고 해당 모듈을 참조합니다. 두 프로젝트 원본을 실험 단계에서 직접 변경하거나, 50종 정의 파일을 따로 수작업 복제해 서로 다른 버전으로 관리하지 않습니다.
+
+\`\`\`bash
+# 각 프로젝트의 격리 feature 브랜치에서 실행
+git clone https://github.com/lyonbegin/shared-n8n-studio.git vendor/shared-n8n-studio
+cd vendor/shared-n8n-studio
+git checkout <검증된-공통-커밋-SHA>
+\`\`\`
+
+**JavaScript/TypeScript UI·테스트에서 사용하는 예시**
+
+\`\`\`js
+// 파일 위치는 실제 checkout 디렉터리 구조에 맞게 조정하십시오.
+import {
+  NODE_CATALOG, NODE_BY_KIND, NODE_GROUPS,
+  defaultParameters, validateParameters
+} from './vendor/shared-n8n-studio/playground/src/node-catalog.js';
+
+// 50종 종류 검색 및 화면 노드 생성
+const available = NODE_CATALOG.filter(node => node.group === '오류·복구');
+const spec = NODE_BY_KIND['business-operation'];
+const parameters = {
+  ...defaultParameters('business-operation'),
+  adapter: 'procureflow',
+  executionMode: 'api',
+  operationId: 'H05'
+};
+
+const errors = validateParameters(spec.kind, parameters);
+if (errors.length) throw new Error(errors.join(', '));
+
+const uiNode = {
+  id: 'business_01',              // 캔버스 인스턴스 ID
+  type: 'studio',                  // Playground 내부 Vue Flow 표시형
+  position: {x: 300, y: 150},
+  data: {kind: spec.kind, label: 'H05 실제 개찰 상세', parameters}
+};
+
+// 이 uiNode는 공식 n8n 실행 JSON이 아닙니다.
+// 공식 n8n의 실제 type/parameters/outputs로 컴파일해야 합니다.
+\`\`\`
+
+**노드 계약 → 공식 n8n 실행 코드 전환 절차**
+
+1. \`spec.implementation === 'native'\`: 프로젝트에 설치된 공식 n8n의 정확한 \`typeVersion\`, 출력 포트 인덱스, 자격증명·파라미터를 조회·검증한 뒤 \`spec.nativeType\`의 워크플로 노드로 변환합니다.
+2. \`spec.implementation === 'composite'\`: 명세와 같은 동작을 하는 **공식 n8n 노드 2개 이상을 실제 연결한 템플릿**으로 컴파일합니다. \`retry\` 등의 kind 하나가 곧 n8n 노드 하나라는 가정을 하지 않습니다.
+3. \`spec.implementation === 'extension'\`: 공식 n8n에서 이미 가능한 구성은 검증된 템플릿을 쓰고, 그 밖의 경우 **설치·등록된 커스텀 n8n 노드 패키지** 또는 인증된 프로젝트 API 어댑터를 구현합니다. 설치되지 않았으면 화면에 **실행 불가** 상태를 표시합니다.
+4. \`business-operation\`: \`executionMode=javascript\`는 공식 Code, \`api\`는 HTTP Request, \`python\`은 프로젝트 함수 allowlist API, \`workflow\`는 Execute Sub-workflow, \`mock\`은 테스트 전용 응답으로 전환합니다.
+5. 실제 n8n 엔진이 생성한 \`executionId\`와 노드별 실행 데이터로 화면 상태를 연결합니다. 브라우저의 \`runSimulation()\` 결과는 실제 실행으로 인정하지 않습니다.
+
+**업무 어댑터 함수 계약 예시 — 프로젝트별로 직접 구현**
+
+\`\`\`ts
+// 예시 인터페이스입니다. 이 코드는 공통 저장소에 실제 서버 런타임을 추가하지 않습니다.
+type OperationRequest = {
+  adapter: 'investment' | 'procureflow';
+  operationId: string;             // 투자 operation_id 또는 PF block ID
+  arguments: Record<string, unknown>;
+  executionMode: 'javascript' | 'api' | 'python' | 'workflow' | 'mock';
+  workflowVersion: number;
+  idempotencyKey: string;
+};
+
+type OperationResult = {
+  runId: string;
+  nodeId: string;
+  status: 'queued' | 'running' | 'success' | 'failed' | 'skipped' | 'waiting_approval' | 'halted';
+  output: unknown;
+  error?: {code: string; message: string};
+  evidence?: {source: 'official' | 'derived' | 'mock'; verified: boolean; ref?: string};
+};
+\`\`\`
+
+실행 전 서버측 \`operationId\` allowlist와 정확한 입력 JSON Schema를 검사하고 \`credentialRef\`만 전달합니다. 인증 비밀 자체는 전송하지 않습니다. 하위 워크플로/분산 작업의 **서버 영속 상태**는 각 운영 프로젝트가 보장합니다.
+
+
 ## 4. Business Operation 5개 실행 방식
 
 | executionMode | UI 설정 | 공식 n8n으로 구현하는 방식 | 프로젝트가 해야 할 일 |
