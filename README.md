@@ -6,6 +6,17 @@
 
 The common upstream target is n8n `2.44.6` pinned to source SHA `b58d9e89d60e9a3485bb511c5091d8be0d9511e4`. **No original application repository or production environment has been modified.** Trading and procurement APIs, workflow data, DBs, credentials, and runtimes remain separate application adapters.
 
+## Independent front-end playground (live)
+
+**[Open Shared n8n Studio Playground](https://shared-n8n-playground-production.up.railway.app/)**
+
+- Standalone Vue 3 + Vue Flow interface under [`playground/`](playground/).
+- Test blank-canvas left/middle Pan, Shift selection, zoom/Fit, node add/delete/drag, handle connections, settings, undo/redo, JSON import/export, and browser-local save/reload.
+- Switch between **common**, **investment**, and **ProcureFlow** synthetic examples. Simulated run only updates visual node statuses.
+- Separate Railway project: `SHARED-N8N-STUDIO-PLAYGROUND`. Does not access production Railway services, n8n server credentials or business APIs.
+- Automated Playwright Chromium checks: [Playground UI workflow](https://github.com/lyonbegin/shared-n8n-studio/actions/workflows/playground-ui.yml).
+- **Acceptance distinction**: this independently testable UI is a Vue Flow interaction playground; the canonical official n8n Vue editor integration and backend persistence are separately gated.
+
 ## Phase 1 · Blank-canvas Pan behavior
 
 The two official upstream versions both use default `panningMouseButton=[1]` and `selectionKeyCode=true`; blank-area left mouse drag performs marquee selection rather than Pan. The fail-closed shared patch switches to:
