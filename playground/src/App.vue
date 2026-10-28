@@ -302,12 +302,13 @@ watch(()=>selectedNodeId.value,()=>{
           <button class="sample-item" :class="{active:template==='procurement'}" @click="changeTemplate('procurement')"><span class="sample-icon">▤</span><span><b>ProcureFlow</b><small>Procurement sample</small></span><span class="sample-chevron">›</span></button>
         </div>
         <div class="sidebar-separator"></div>
-        <div class="section-heading"><b>노드 라이브러리</b><small>{{palette.length}} TYPES</small></div>
-        <div class="search-wrap"><span>⌕</span><input v-model="search" aria-label="노드 검색" placeholder="노드 검색..." /></div>
+        <div class="section-heading"><b>노드 라이브러리</b><small data-testid="catalog-count">{{palette.length}} TYPES</small></div>
+        <div class="catalog-legend"><span>공식 {{catalogStats.native}}</span><span>조합 {{catalogStats.composite}}</span><span>확장 {{catalogStats.extension}}</span></div>
+        <div class="search-wrap"><span>⌕</span><input v-model="search" aria-label="노드 검색" placeholder="노드 이름·기능·분류 검색..." /></div>
         <div class="palette-scroll">
           <template v-for="group in paletteGroups" :key="group">
             <div v-if="filteredPalette.some(p=>p.group===group)" class="palette-category">{{group}}</div>
-            <button v-for="item in filteredPalette.filter(p=>p.group===group)" :key="item.kind" class="palette-item" draggable="true" @dragstart="onPaletteDragStart($event,item.kind)" @click="addNode(item.kind)" :title="item.name+' · 클릭하거나 캔버스로 드래그'">
+            <button v-for="item in filteredPalette.filter(p=>p.group===group)" :key="item.kind" class="palette-item" :data-node-kind="item.kind" draggable="true" @dragstart="onPaletteDragStart($event,item.kind)" @click="addNode(item.kind)" :title="item.name+' · 클릭하거나 캔버스로 드래그'">
               <span class="palette-icon" :style="{'--kind-color':item.color}">{{item.icon}}</span>
               <span><b>{{item.name}}</b><small>{{item.description}}</small></span><span class="palette-add">＋</span>
             </button>
@@ -368,12 +369,34 @@ watch(()=>selectedNodeId.value,()=>{
             <label class="field-label">노드 이름</label>
             <input class="field-control" v-model="selectedNode.data.label" aria-label="노드 이름" @change="recordHistory"/>
             <label class="field-label">노드 유형</label>
-            <select class="field-control" v-model="selectedNode.data.kind" aria-label="노드 유형" @change="recordHistory">
+            <select class="field-control" v-model="selectedNode.data.kind" aria-label="노드 유형" @change="selectedNode.data.parameters=defaultParameters(selectedNode.data.kind);inspectorJson=JSON.stringify(selectedNode.data.parameters,null,2);recordHistory()">
               <option v-for="p in palette" :key="p.kind" :value="p.kind">{{p.name}}</option>
             </select>
+            <div class="contract-summary" v-if="selectedSpec" data-testid="node-contract">
+              <b>{{selectedSpec.implementation==='native'?'공식 n8n 기본 노드':selectedSpec.implementation==='composite'?'공식 노드 조합 설계':'프로젝트 확장 구현 필요'}}</b>
+              <span>노드 유형: {{selectedSpec.kind}}</span>
+              <span>입력: {{selectedSpec.inputs.join(', ')}} · 출력: {{selectedSpec.outputs.join(', ')}}</span>
+              <span v-if="selectedSpec.nativeType">n8n 매핑: {{selectedSpec.nativeType}}</span>
+              <span v-else>실제 실행 어댑터 미연결 (설계 계약)</span>
+            </div>
             <label class="field-label">설명</label>
             <textarea class="field-control" rows="2" v-model="selectedNode.data.description" @change="recordHistory"></textarea>
-            <div class="inspector-section-head"><b>파라미터</b><span>JSON</span></div>
+            <div class="inspector-section-head"><b>노드별 실행 설정</b><span>TYPE-CONTRACT</span></div>
+            <div class="settings-fields" data-testid="settings-fields">
+              <div v-for="field in selectedFields" :key="selectedNode.id+':'+field.key" class="settings-field">
+                <label class="field-label" :for="'setting-'+field.key">{{field.label}}</label>
+                <select v-if="field.type==='select'" class="field-control" :id="'setting-'+field.key" :data-setting="field.key" :value="selectedNode.data.parameters[field.key]" @change="updateParameter(field,$event.target.value)">
+                  <option v-for="option in field.options" :key="option.value" :value="option.value">{{option.label}}</option>
+                </select>
+                <label v-else-if="field.type==='boolean'" class="toggle-setting">
+                  <input type="checkbox" :data-setting="field.key" :checked="Boolean(selectedNode.data.parameters[field.key])" @change="updateParameter(field,$event.target.checked)"/>
+                  <span>{{selectedNode.data.parameters[field.key]?'사용':'사용 안 함'}}</span>
+                </label>
+                <textarea v-else-if="field.type==='code'||field.type==='json'" :id="'setting-'+field.key" :data-setting="field.key" :rows="field.type==='code'?6:4" spellcheck="false" class="field-control code-editor" :value="displayParameter(field)" @change="updateParameter(field,$event.target.value)"></textarea>
+                <input v-else :id="'setting-'+field.key" :data-setting="field.key" :type="field.type==='number'?'number':'text'" :min="field.min" :max="field.max" class="field-control" :placeholder="field.placeholder||''" :value="displayParameter(field)" @change="updateParameter(field,$event.target.value)"/>
+              </div>
+            </div>
+            <div class="inspector-section-head"><b>전체 파라미터</b><span>JSON</span></div>
             <textarea class="field-control code-editor" v-model="inspectorJson" aria-label="노드 JSON 파라미터" spellcheck="false" rows="9"></textarea>
             <button class="secondary-btn full" @click="applyNodeSettings">설정 적용</button>
             <div class="position-panel"><span>X: {{Math.round(selectedNode.position.x)}}</span><span>Y: {{Math.round(selectedNode.position.y)}}</span></div>
@@ -407,8 +430,8 @@ watch(()=>selectedNodeId.value,()=>{
       </aside>
     </div>
     <div v-if="showHelp" class="help-overlay" @click.self="showHelp=false"><div class="help-dialog">
-      <button class="help-close" @click="showHelp=false">×</button><span class="help-kicker">INTERACTION GUIDE</span><h2>독립 캔버스 플레이그라운드</h2>
-      <p>공통 편집기 조작 UX를 시험하는 별도 Vue Flow 프론트입니다. 실제 공식 n8n 엔진에 연결되지 않았습니다.</p>
+      <button class="help-close" @click="showHelp=false">×</button><span class="help-kicker">INTERACTION GUIDE</span><h2>50종 노드 계약 플레이그라운드</h2>
+      <p>공통 50종 노드의 팔레트·설정·포트 연결을 시험하는 별도 Vue Flow 프론트입니다. 공식 n8n 엔진과 실제 투자·조달 API에는 연결되지 않았습니다.</p>
       <div class="help-grid"><div><b>01 / Pan</b><span>빈 캔버스 왼쪽/가운데 드래그</span></div><div><b>02 / Select</b><span>Shift + 드래그 / 노드 클릭</span></div><div><b>03 / Edit</b><span>노드 추가·이동·삭제·연결</span></div><div><b>04 / Save</b><span>브라우저 저장 / JSON 내보내기</span></div></div>
       <div class="help-caution">모의 실행, 브라우저 저장 및 예제 데이터만 포함됩니다. n8n 서버 저장·실제 노드 실행 검증은 별도 단계입니다.</div>
       <button class="primary-btn" @click="showHelp=false">테스트 시작</button>
