@@ -1,0 +1,28 @@
+name: Shared Stock Editor module build and adapter tests
+on:
+  push:
+    branches: [feature/stock-integrated-editor-20261029]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  build-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Install dependencies
+        run: npm install --prefix playground --no-audit --no-fund
+      - name: Run stock n8n roundtrip and catalog tests
+        run: |
+          node --test playground/tests/investment-adapter.test.mjs
+          npm test
+      - name: Build stock configuration of shared editor
+        env:
+          VITE_EDITOR_PROJECT: investment
+        run: npm --prefix playground run build
+      - name: Verify build assets
+        run: |
+          test -s playground/dist/index.html
+          grep -qr '투자 자동화' playground/dist/assets/*.js

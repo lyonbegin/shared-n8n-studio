@@ -5,8 +5,15 @@ import {Background} from '@vue-flow/background';
 import {Controls} from '@vue-flow/controls';
 import {MiniMap} from '@vue-flow/minimap';
 import {NODE_CATALOG,NODE_GROUPS,NODE_BY_KIND,defaultParameters,visibleFields,validateParameters} from './node-catalog.js';
+import {STOCK_WORKFLOWS,fromN8nWorkflow,toN8nWorkflow} from './investment-adapter.js';
 
+const STOCK_MODE=import.meta.env.VITE_EDITOR_PROJECT==='investment';
 const STORAGE_KEY='shared-n8n-studio:playground:v1';
+const stockMode=STOCK_MODE;
+const stockWorkflows=STOCK_WORKFLOWS;
+const stockFlow=ref(stockWorkflows[0][0]);
+const stockOriginal=ref(null);
+const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
 const paletteGroups=NODE_GROUPS;
 const paletteMap=NODE_BY_KIND;
@@ -194,6 +201,42 @@ function applyNodeSettings(){
   }catch(e){announce('설정 JSON 오류: '+e.message);}
 }
 function applyEdgeSettings(){recordHistory();announce('연결선 설정을 변경했습니다');}
+async function openStockFlow(file){
+ if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
+ stockFlow.value=file;
+ // Persist route synchronously, not only after network fetch, to avoid
+ // restoring a stale F01 when the user reloads immediately after an edit.
+ localStorage.setItem('shared-n8n-studio:investment:selected',file);
+ const route=new URL(window.location.href);
+ route.searchParams.set('workflow',file);
+ window.history.replaceState(null,'',route.pathname+route.search+route.hash);
+ const stored=localStorage.getItem(storageKey());
+ try{
+   let data;
+   if(stored){
+     data=JSON.parse(stored);
+     if(!Array.isArray(data.nodes)||!Array.isArray(data.edges)||!data.original)throw Error('저장 데이터 손상');
+   }else{
+     const response=await fetch('/stock-workflows/'+file,{cache:'no-store'});
+     if(!response.ok)throw Error('원본 워크플로 HTTP '+response.status);
+     data=fromN8nWorkflow(await response.json());
+   }
+   // VueFlow's initial internal nodes may still be synchronizing on mount.
+   // Wait for its first actual paint before restoring a same-tab local draft;
+   // otherwise the initial 5-node synthetic template can overwrite 6 real nodes.
+   await nextTick();
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   if(stockFlow.value!==file)return;
+   stockOriginal.value=data.original;
+   nodes.value=data.nodes;edges.value=data.edges;
+   workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
+   selectedNodeId.value=null;selectedEdgeId.value=null;
+   history=[];historyIndex=-1;recordHistory();
+   localStorage.setItem('shared-n8n-studio:investment:selected',file);
+   announce((stored?'저장된 편집본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개');
+   nextTick(()=>fitView({padding:.25,duration:150}));
+ }catch(err){announce('워크플로 불러오기 실패: '+err.message);}
+}
 function changeTemplate(next){
   if(running.value)return;
   const t=makeTemplate(next);
@@ -209,7 +252,7 @@ function clearCanvas(){
 }
 function saveLocal(){
   const payload={format:'shared-n8n-studio-playground/v1',workflowName:workflowName.value,template:template.value,nodes:nodes.value,edges:edges.value};
-  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));localSavedAt.value=new Date().toLocaleTimeString('ko-KR');announce('이 브라우저에 저장했습니다 (서버 저장 아님)');}
+  try{if(stockMode){payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';}localStorage.setItem(storageKey(),JSON.stringify(payload));localSavedAt.value=new Date().toLocaleTimeString('ko-KR');announce('이 브라우저에 저장했습니다 (서버 저장 아님)');}
   catch(e){announce('브라우저 저장 실패: '+e.message);}
 }
 function importGraph(raw){
@@ -226,19 +269,32 @@ function importGraph(raw){
   selectedNodeId.value=null;selectedEdgeId.value=null;recordHistory();nextTick(()=>fitView({padding:.2,duration:250}));
 }
 function loadLocal(){
-  try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw){announce('저장된 워크플로가 없습니다');return;}importGraph(JSON.parse(raw));announce('브라우저 저장 데이터를 다시 불러왔습니다');}
+  try{const raw=localStorage.getItem(storageKey());if(!raw){announce('저장된 워크플로가 없습니다');return;}if(stockMode){const d=JSON.parse(raw);if(!d.original)throw Error('원본 JSON 누락');stockOriginal.value=d.original;nodes.value=d.nodes;edges.value=d.edges;workflowName.value=d.workflowName;recordHistory();nextTick(()=>fitView({padding:.2,duration:250}));}else importGraph(JSON.parse(raw));announce('브라우저 저장 데이터를 다시 불러왔습니다');}
   catch(e){announce('불러오기 실패: '+e.message);}
 }
 function exportJson(){
-  const data={format:'shared-n8n-studio-playground/v1',workflowName:workflowName.value,nodes:nodes.value,edges:edges.value};
+  let data;
+  try{data=stockMode?toN8nWorkflow({original:stockOriginal.value,nodes:nodes.value,edges:edges.value,workflowName:workflowName.value}):{format:'shared-n8n-studio-playground/v1',workflowName:workflowName.value,nodes:nodes.value,edges:edges.value};}
+  catch(e){announce('n8n JSON 내보내기 실패: '+e.message);return;}
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download='shared-n8n-workflow-demo.json';document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);
+  a.href=url;a.download=stockMode?stockFlow.value.split('/').pop():'shared-n8n-workflow-demo.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
   announce('JSON 파일을 내려받았습니다');
 }
 async function onImport(event){
   const f=event.target.files?.[0];if(!f)return;
-  try{importGraph(JSON.parse(await f.text()));announce('JSON 워크플로를 가져왔습니다 (모의 데이터)');}
+  try{
+    const raw=JSON.parse(await f.text());
+    if(stockMode){
+      const converted=fromN8nWorkflow(raw);
+      stockOriginal.value=converted.original;nodes.value=converted.nodes;edges.value=converted.edges;
+      workflowName.value=converted.workflowName;recordHistory();
+      nextTick(()=>fitView({padding:.24,duration:200}));
+      announce('원본 n8n JSON 가져오기 완료 · '+nodes.value.length+'개 노드');
+    }else{
+      importGraph(raw);announce('JSON 워크플로를 가져왔습니다 (모의 데이터)');
+    }
+  }
   catch(e){announce('가져오기 실패: '+e.message);}
   event.target.value='';
 }
@@ -267,7 +323,13 @@ function fit(){fitView({padding:0.23,duration:250});announce('전체 화면 맞�
 onMounted(()=>{
   document.addEventListener('keydown',onKeyDown);
   recordHistory();
-  nextTick(()=>fitView({padding:.23,duration:0}));
+  if(stockMode){
+    const path=new URLSearchParams(window.location.search).get('workflow');
+    const last=localStorage.getItem('shared-n8n-studio:investment:selected');
+    const chosen=STOCK_WORKFLOWS.some(x=>x[0]===path)?path:STOCK_WORKFLOWS.some(x=>x[0]===last)?last:STOCK_WORKFLOWS[0][0];
+    openStockFlow(chosen);
+  }
+  else nextTick(()=>fitView({padding:.23,duration:0}));
 });
 onBeforeUnmount(()=>{document.removeEventListener('keydown',onKeyDown);if(taskTimer)clearTimeout(taskTimer);});
 watch(()=>selectedNodeId.value,()=>{
@@ -281,9 +343,9 @@ watch(()=>selectedNodeId.value,()=>{
       <div class="brand">
         <div class="brand-mark"><span></span><span></span><span></span><span></span></div>
         <div class="brand-text"><strong>n8n <em>Studio</em></strong><small>SHARED EDITOR LAB</small></div>
-        <span class="brand-divider"></span><span class="brand-trailing">Playground</span>
+        <span class="brand-divider"></span><span class="brand-trailing">{{stockMode?'투자 자동화 · 공통 편집기':'Playground'}}</span>
       </div>
-      <div class="environment"><span class="pulse-dot"></span> 독립 테스트 환경 <span class="env-separator">/</span> <b>LOCAL ONLY</b></div>
+      <div class="environment"><span class="pulse-dot"></span> {{stockMode?'주식 자동화 · 공통 n8n 모듈':'독립 테스트 환경'}} <span class="env-separator">/</span> <b>{{stockMode?'편집·데이터 어댑터':'LOCAL ONLY'}}</b></div>
       <div class="top-actions">
         <button class="icon-btn outline" title="도움말" aria-label="도움말" @click="showHelp=!showHelp">?</button>
         <a class="github-link" href="https://github.com/lyonbegin/shared-n8n-studio" target="_blank" rel="noopener">GitHub <span>↗</span></a>
@@ -293,11 +355,16 @@ watch(()=>selectedNodeId.value,()=>{
       <aside class="left-panel">
         <div class="section-overline">WORKSPACE</div>
         <div class="project-tile">
-          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>Canvas interaction test</small></div><span class="project-menu">•••</span>
+          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>{{stockMode?'Investment · 실제 13개 워크플로':'Canvas interaction test'}}</small></div><span class="project-menu">•••</span>
         </div>
         <div class="sidebar-separator"></div>
-        <div class="section-heading"><b>샘플 워크플로</b><small>03</small></div>
-        <div class="sample-list">
+        <div class="section-heading"><b>{{stockMode?'투자 자동화 워크플로':'샘플 워크플로'}}</b><small>{{stockMode?13:3}}</small></div>
+        <div v-if="stockMode" class="sample-list" data-testid="stock-workflows">
+          <button v-for="[file,label] in stockWorkflows" :key="file" class="sample-item" :class="{active:stockFlow===file}" :data-stock-flow="file" @click="openStockFlow(file)">
+            <span class="sample-icon">↗</span><span><b>{{label}}</b><small>{{file.startsWith('operations')?'운영 워크플로':'시나리오 테스트'}}</small></span><span class="sample-chevron">›</span>
+          </button>
+        </div>
+        <div v-else class="sample-list">
           <button class="sample-item" :class="{active:template==='common'}" @click="changeTemplate('common')"><span class="sample-icon">◈</span><span><b>공통 기능 테스트</b><small>Basic canvas</small></span><span class="sample-chevron">›</span></button>
           <button class="sample-item" :class="{active:template==='investment'}" @click="changeTemplate('investment')"><span class="sample-icon">↗</span><span><b>주식 자동화</b><small>Investment sample</small></span><span class="sample-chevron">›</span></button>
           <button class="sample-item" :class="{active:template==='procurement'}" @click="changeTemplate('procurement')"><span class="sample-icon">▤</span><span><b>ProcureFlow</b><small>Procurement sample</small></span><span class="sample-chevron">›</span></button>
@@ -320,7 +387,7 @@ watch(()=>selectedNodeId.value,()=>{
           </template>
           <p v-if="!filteredPalette.length" class="empty-search">해당하는 노드가 없습니다.</p>
         </div>
-        <div class="sidebar-foot"><span class="keycaps">SPACE</span> Pan <span class="keycaps">SHIFT</span> Select</div>
+        <div class="sidebar-foot"><span class="keycaps">좌측 드래그</span> Pan <span class="keycaps">SHIFT</span> Select</div>
       </aside>
 
       <section class="main-column">
@@ -338,12 +405,12 @@ watch(()=>selectedNodeId.value,()=>{
             <button class="toolbar-btn" @click="fileInput?.click()" title="JSON 가져오기">⇧</button>
             <input ref="fileInput" type="file" accept=".json,application/json" class="visually-hidden" @change="onImport"/>
             <button class="toolbar-btn" @click="loadLocal" title="브라우저 저장값 불러오기">↺</button>
-            <button class="primary-btn" @click="saveLocal">▣ <span>브라우저 저장</span></button>
+            <button class="primary-btn" @click="saveLocal">▣ <span>{{stockMode?'투자 편집본 저장':'브라우저 저장'}}</span></button>
           </div>
         </div>
         <div class="canvas-info">
-          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>Editor playground</b></div>
-          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● 모의 데이터 전용</span></div>
+          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?'Investment · 13개 실제 워크플로':'Editor playground'}}</b></div>
+          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?'실제 워크플로 보기·편집 · 실행 연결 전':'모의 데이터 전용'}}</span></div>
         </div>
         <div class="canvas-holder" data-testid="canvas-holder" @dragover="onDragOver" @drop="onDrop">
           <VueFlow id="shared-studio-playground" v-model:nodes="nodes" v-model:edges="edges" :node-types="nodeTypes" :fit-view-on-init="true"
@@ -356,12 +423,12 @@ watch(()=>selectedNodeId.value,()=>{
             <Controls position="bottom-left" :show-interactive="false"/>
             <MiniMap position="bottom-right" :node-color="n=>paletteMap[n.data.kind]?.color||'#8c9fb2'" :mask-color="'rgba(238,244,250,.72)'"/>
           </VueFlow>
-          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> PLAYGROUND</div>
+          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> {{stockMode?'INVESTMENT':'PLAYGROUND'}}</div>
           <div class="canvas-controls-hint">좌클릭 드래그: 화면 이동 <span>·</span> Shift + 드래그: 다중 선택 <span>·</span> 노드 핸들: 연결</div>
         </div>
         <div class="bottom-bar">
           <span class="bottom-status"><span class="green-dot"></span>{{status}}</span>
-          <span class="bottom-right"><span>Vue Flow · Standalone</span><span class="bottom-divider"></span> No API connected</span>
+          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?'실제 n8n JSON · 서버 실행 연결 전':'No API connected'}}</span>
         </div>
       </section>
 
@@ -428,8 +495,8 @@ watch(()=>selectedNodeId.value,()=>{
           <div v-for="(ev,i) in events" :key="i" class="activity-item"><span class="activity-marker"></span><div><b>{{ev.text}}</b><small>{{ev.time}}</small></div></div>
         </div>
         <div class="right-bottom">
-          <div class="run-title"><div><strong>Test execution</strong><small>외부 API·실거래 없이 화면만 시뮬레이션</small></div><span class="run-icon">◉</span></div>
-          <button class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
+          <div class="run-title"><div><strong>{{stockMode?'실행 엔진 상태':'Test execution'}}</strong><small>{{stockMode?'공통 UI에 실제 실행 서버는 미연결 · 실제 주문 불가':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
+          <button v-if="!stockMode" class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
           <button class="run-reset" @click="resetRun">실행 표시 초기화</button>
         </div>
       </aside>
