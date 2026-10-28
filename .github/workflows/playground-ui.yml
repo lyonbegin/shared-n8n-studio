@@ -1,0 +1,35 @@
+name: Standalone playground UI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  build-and-chrome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: playground
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application
+        run: npm install --no-audit --no-fund
+      - name: Build production UI
+        run: npm run build
+      - name: Install Chrome
+        run: npx playwright install --with-deps chromium
+      - name: Real Chromium user interactions
+        run: npm test
+      - name: Preserve screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-playground-chrome-proof
+          path: |
+            playground/playwright-report/
+            playground/test-results/
+          if-no-files-found: ignore
