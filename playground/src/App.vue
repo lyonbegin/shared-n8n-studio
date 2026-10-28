@@ -278,7 +278,7 @@ function exportJson(){
   catch(e){announce('n8n JSON 내보내기 실패: '+e.message);return;}
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=stockMode?stockFlow.value.split('/').pop():'shared-n8n-workflow-demo.json';document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);
+  a.href=url;a.download=stockMode?stockFlow.value.split('/').pop():'shared-n8n-workflow-demo.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
   announce('JSON 파일을 내려받았습니다');
 }
 async function onImport(event){
