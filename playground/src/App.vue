@@ -70,6 +70,7 @@ const selectedNodeId=ref(null);
 const selectedEdgeId=ref(null);
 const activeTab=ref('nodes');
 const search=ref('');
+const groupFilter=ref('all');
 const template=ref('common');
 const workflowName=ref('Untitled workflow');
 const status=ref('편집기를 준비했습니다');
@@ -90,7 +91,7 @@ const catalogStats=computed(()=>({
  composite:palette.filter(p=>p.implementation==='composite').length,
  extension:palette.filter(p=>p.implementation==='extension').length
 }));
-const filteredPalette=computed(()=>palette.filter(x=>(x.name+' '+x.kind+' '+x.description+' '+x.group+' '+(x.nativeType||'')).toLowerCase().includes(search.value.toLowerCase())));
+const filteredPalette=computed(()=>palette.filter(x=>(groupFilter.value==='all'||x.group===groupFilter.value)&&(x.name+' '+x.kind+' '+x.description+' '+x.group+' '+(x.nativeType||'')).toLowerCase().includes(search.value.toLowerCase())));
 const canUndo=ref(false),canRedo=ref(false);
 let history=[],historyIndex=-1,suspendHistory=false;
 function snapshot(){return JSON.stringify({nodes:nodes.value,edges:edges.value,name:workflowName.value,template:template.value});}
@@ -305,6 +306,10 @@ watch(()=>selectedNodeId.value,()=>{
         <div class="section-heading"><b>노드 라이브러리</b><small data-testid="catalog-count">{{palette.length}} TYPES</small></div>
         <div class="catalog-legend"><span>공식 {{catalogStats.native}}</span><span>조합 {{catalogStats.composite}}</span><span>확장 {{catalogStats.extension}}</span></div>
         <div class="search-wrap"><span>⌕</span><input v-model="search" aria-label="노드 검색" placeholder="노드 이름·기능·분류 검색..." /></div>
+        <select class="category-filter" v-model="groupFilter" aria-label="노드 분류 선택">
+          <option value="all">전체 분류 · {{palette.length}}종</option>
+          <option v-for="group in paletteGroups" :key="group" :value="group">{{group}} · {{palette.filter(p=>p.group===group).length}}종</option>
+        </select>
         <div class="palette-scroll">
           <template v-for="group in paletteGroups" :key="group">
             <div v-if="filteredPalette.some(p=>p.group===group)" class="palette-category">{{group}}</div>
