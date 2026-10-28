@@ -1,3 +1,4 @@
+import {stringify as stringifyFlatted} from 'flatted';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeN8nExecution,redactExecutionValue,readN8nExecutionFile} from '../src/n8n-execution-inspector.js';
@@ -52,4 +53,11 @@ test('execution file must be <= 2MB',async()=>{
  const file={size:300,text:async()=>JSON.stringify(record)};
  const imported=await readN8nExecutionFile(file,workflow);
  assert.equal(imported.nodeResults['Safe NoOp'].status,'success');
+});
+
+test('official n8n flatted execution data can be decoded',()=>{
+ const source={...record,data:stringifyFlatted(record.data)};
+ const imported=normalizeN8nExecution(source,workflow);
+ assert.equal(imported.nodeResults['Safe Manual Trigger'].status,'success');
+ assert.equal(imported.nodeResults['Safe NoOp'].output[0][0].json.authorization,'[REDACTED]');
 });
