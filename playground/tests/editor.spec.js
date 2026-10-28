@@ -54,7 +54,7 @@ test('zoom buttons and local browser save load',async({page})=>{
   await page.getByRole('button',{name:'브라우저 저장'}).click();
   await expect(page.getByText(/이 브라우저에 저장했습니다/)).toBeVisible();
   await page.reload();
-  await page.getByRole('button',{name:'브라우저 저장값 불러오기'}).click();
+  await page.locator('button[title="브라우저 저장값 불러오기"]').click();
   await expect(page.locator('.vue-flow__node')).toHaveCount(5);
   await page.screenshot({path:'test-results/playground-preview.png',fullPage:true});
 });
