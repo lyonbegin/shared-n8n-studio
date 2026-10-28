@@ -5,8 +5,15 @@ import {Background} from '@vue-flow/background';
 import {Controls} from '@vue-flow/controls';
 import {MiniMap} from '@vue-flow/minimap';
 import {NODE_CATALOG,NODE_GROUPS,NODE_BY_KIND,defaultParameters,visibleFields,validateParameters} from './node-catalog.js';
+import {STOCK_WORKFLOWS,fromN8nWorkflow,toN8nWorkflow} from './investment-adapter.js';
 
+const STOCK_MODE=import.meta.env.VITE_EDITOR_PROJECT==='investment';
 const STORAGE_KEY='shared-n8n-studio:playground:v1';
+const stockMode=STOCK_MODE;
+const stockWorkflows=STOCK_WORKFLOWS;
+const stockFlow=ref(stockWorkflows[0][0]);
+const stockOriginal=ref(null);
+const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
 const paletteGroups=NODE_GROUPS;
 const paletteMap=NODE_BY_KIND;
@@ -194,6 +201,30 @@ function applyNodeSettings(){
   }catch(e){announce('설정 JSON 오류: '+e.message);}
 }
 function applyEdgeSettings(){recordHistory();announce('연결선 설정을 변경했습니다');}
+async function openStockFlow(file){
+ if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
+ stockFlow.value=file;
+ const stored=localStorage.getItem(storageKey());
+ try{
+   let data;
+   if(stored){
+     data=JSON.parse(stored);
+     if(!Array.isArray(data.nodes)||!Array.isArray(data.edges)||!data.original)throw Error('저장 데이터 손상');
+   }else{
+     const response=await fetch('/stock-workflows/'+file,{cache:'no-store'});
+     if(!response.ok)throw Error('원본 워크플로 HTTP '+response.status);
+     data=fromN8nWorkflow(await response.json());
+   }
+   stockOriginal.value=data.original;
+   nodes.value=data.nodes;edges.value=data.edges;
+   workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
+   selectedNodeId.value=null;selectedEdgeId.value=null;
+   history=[];historyIndex=-1;recordHistory();
+   localStorage.setItem('shared-n8n-studio:investment:selected',file);
+   announce((stored?'저장된 편집본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개');
+   nextTick(()=>fitView({padding:.25,duration:150}));
+ }catch(err){announce('워크플로 불러오기 실패: '+err.message);}
+}
 function changeTemplate(next){
   if(running.value)return;
   const t=makeTemplate(next);
@@ -209,7 +240,7 @@ function clearCanvas(){
 }
 function saveLocal(){
   const payload={format:'shared-n8n-studio-playground/v1',workflowName:workflowName.value,template:template.value,nodes:nodes.value,edges:edges.value};
-  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));localSavedAt.value=new Date().toLocaleTimeString('ko-KR');announce('이 브라우저에 저장했습니다 (서버 저장 아님)');}
+  try{if(stockMode){payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';}localStorage.setItem(storageKey(),JSON.stringify(payload));localSavedAt.value=new Date().toLocaleTimeString('ko-KR');announce('이 브라우저에 저장했습니다 (서버 저장 아님)');}
   catch(e){announce('브라우저 저장 실패: '+e.message);}
 }
 function importGraph(raw){
@@ -226,14 +257,16 @@ function importGraph(raw){
   selectedNodeId.value=null;selectedEdgeId.value=null;recordHistory();nextTick(()=>fitView({padding:.2,duration:250}));
 }
 function loadLocal(){
-  try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw){announce('저장된 워크플로가 없습니다');return;}importGraph(JSON.parse(raw));announce('브라우저 저장 데이터를 다시 불러왔습니다');}
+  try{const raw=localStorage.getItem(storageKey());if(!raw){announce('저장된 워크플로가 없습니다');return;}if(stockMode){const d=JSON.parse(raw);if(!d.original)throw Error('원본 JSON 누락');stockOriginal.value=d.original;nodes.value=d.nodes;edges.value=d.edges;workflowName.value=d.workflowName;recordHistory();nextTick(()=>fitView({padding:.2,duration:250}));}else importGraph(JSON.parse(raw));announce('브라우저 저장 데이터를 다시 불러왔습니다');}
   catch(e){announce('불러오기 실패: '+e.message);}
 }
 function exportJson(){
-  const data={format:'shared-n8n-studio-playground/v1',workflowName:workflowName.value,nodes:nodes.value,edges:edges.value};
+  let data;
+  try{data=stockMode?toN8nWorkflow({original:stockOriginal.value,nodes:nodes.value,edges:edges.value,workflowName:workflowName.value}):{format:'shared-n8n-studio-playground/v1',workflowName:workflowName.value,nodes:nodes.value,edges:edges.value};}
+  catch(e){announce('n8n JSON 내보내기 실패: '+e.message);return;}
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download='shared-n8n-workflow-demo.json';document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);
+  a.href=url;a.download=stockMode?stockFlow.value.split('/').pop():'shared-n8n-workflow-demo.json';document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);
   announce('JSON 파일을 내려받았습니다');
 }
 async function onImport(event){
@@ -267,7 +300,8 @@ function fit(){fitView({padding:0.23,duration:250});announce('전체 화면 맞�
 onMounted(()=>{
   document.addEventListener('keydown',onKeyDown);
   recordHistory();
-  nextTick(()=>fitView({padding:.23,duration:0}));
+  if(stockMode){const last=localStorage.getItem('shared-n8n-studio:investment:selected');openStockFlow(STOCK_WORKFLOWS.some(x=>x[0]===last)?last:STOCK_WORKFLOWS[0][0]);}
+  else nextTick(()=>fitView({padding:.23,duration:0}));
 });
 onBeforeUnmount(()=>{document.removeEventListener('keydown',onKeyDown);if(taskTimer)clearTimeout(taskTimer);});
 watch(()=>selectedNodeId.value,()=>{
