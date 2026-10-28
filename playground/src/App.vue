@@ -6,6 +6,7 @@ import {Controls} from '@vue-flow/controls';
 import {MiniMap} from '@vue-flow/minimap';
 import {NODE_CATALOG,NODE_GROUPS,NODE_BY_KIND,defaultParameters,visibleFields,validateParameters} from './node-catalog.js';
 import {STOCK_WORKFLOWS,fromN8nWorkflow,toN8nWorkflow} from './investment-adapter.js';
+import {readN8nExecutionFile} from './n8n-execution-inspector.js';
 
 const STOCK_MODE=import.meta.env.VITE_EDITOR_PROJECT==='investment';
 const STORAGE_KEY='shared-n8n-studio:playground:v1';
@@ -17,6 +18,8 @@ const stockServerVersion=ref(0);
 const stockServerState=ref('');
 const stockServerAvailable=ref(false);
 const stockVersionRows=ref([]);
+const importedExecution=ref(null);
+const runFileInput=ref(null);
 const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
 const paletteGroups=NODE_GROUPS;
@@ -49,7 +52,7 @@ const NodeCard=defineComponent({
     return ()=> {
       const meta=paletteMap[props.data.kind]||paletteMap.code;
       return h('div',{
-        class:['studio-node',props.selected?'is-selected':'',props.data.state==='success'?'is-success':'',props.data.state==='running'?'is-running':''],
+        class:['studio-node',props.selected?'is-selected':'',props.data.state==='success'?'is-success':'',props.data.state==='running'?'is-running':'',props.data.state==='error'?'is-error':''],
         'data-testid':'studio-node','data-node-id':props.id,
         style:{'--node-accent':meta.color}
       },[
@@ -64,7 +67,7 @@ const NodeCard=defineComponent({
         ]),
         h('div',{class:'node-footer'},[
           h('span',{class:['node-status-dot',props.data.state||'idle']}),
-          h('span',props.data.state==='running'?'실행 중':props.data.state==='success'?'모의 성공': '준비됨'),
+          h('span',props.data.stateSource==='execution_file'?(props.data.state==='error'?'실행 기록: 오류':props.data.state==='success'?'실행 기록: 성공':props.data.state==='running'?'실행 기록: 실행 중':'기록 없음'):props.data.state==='running'?'실행 중':props.data.state==='success'?'모의 성공':'준비됨'),
           h('span',{class:'node-id'},props.id.replace(/^demo_.+?_/, '#'))
         ]),
         ...((meta.outputs||['main']).map((port,i)=>h(Handle,{type:'source',position:Position.Right,id:port,class:'port port-out',title:'출력: '+port,style:{top:((i+1)/(meta.outputs.length+1)*100)+'%'}})))
@@ -96,6 +99,7 @@ const edgeCount=computed(()=>edges.value.length);
 const selectedNode=computed(()=>nodes.value.find(n=>n.id===selectedNodeId.value)||null);
 const selectedEdge=computed(()=>edges.value.find(e=>e.id===selectedEdgeId.value)||null);
 const selectedSpec=computed(()=>selectedNode.value?paletteMap[selectedNode.value.data.kind]:null);
+const selectedExecutionResult=computed(()=>selectedNode.value&&importedExecution.value?importedExecution.value.nodeResults[selectedNode.value.data.label]||null:null);
 const selectedFields=computed(()=>selectedSpec.value?visibleFields(selectedSpec.value,selectedNode.value?.data.parameters||{}):[]);
 const catalogStats=computed(()=>({
  native:palette.filter(p=>p.implementation==='native').length,
@@ -230,9 +234,29 @@ async function restoreStockVersion(version){
    announce('이전 버전 v'+version+'을 서버 v'+result.version+'으로 복원했습니다');
  }catch(err){announce('버전 복원 실패: '+err.message);}
 }
+function clearImportedExecution(silent=false){
+ importedExecution.value=null;
+ nodes.value=nodes.value.map(n=>({...n,data:{...n.data,state:'idle',stateSource:null}}));
+ if(!silent)announce('외부 실행 결과 표시를 초기화했습니다 · 실제 워크플로는 변경되지 않습니다');
+}
+async function importN8nExecution(event){
+ const file=event.target.files?.[0];event.target.value='';
+ if(!file||!stockMode)return;
+ try{
+  const workflow=toN8nWorkflow({original:stockOriginal.value,nodes:nodes.value,edges:edges.value,workflowName:workflowName.value});
+  const result=await readN8nExecutionFile(file,workflow);
+  importedExecution.value=result;
+  nodes.value=nodes.value.map(n=>{
+   const state=result.nodeResults[n.data.label]?.status||'idle';
+   return {...n,data:{...n.data,state,stateSource:'execution_file'}};
+  });
+  announce('공식 n8n 실행 JSON 조회 · '+result.executedCount+'개 기록 · 오류 '+result.errorCount+'개 · 실제 엔진 실행 아님');
+ }catch(err){announce('실행 결과 불러오기 실패: '+err.message);}
+}
 async function openStockFlow(file){
  if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
  stockFlow.value=file;
+ clearImportedExecution(true);
  // Persist route synchronously, not only after network fetch, to avoid
  // restoring a stale F01 when the user reloads immediately after an edit.
  localStorage.setItem('shared-n8n-studio:investment:selected',file);
@@ -274,7 +298,7 @@ async function openStockFlow(file){
    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
    if(stockFlow.value!==file)return;
    stockOriginal.value=data.original;
-   nodes.value=data.nodes;edges.value=data.edges;
+   nodes.value=data.nodes.map(n=>({...n,data:{...n.data,state:'idle',stateSource:null}}));edges.value=data.edges;
    workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
    selectedNodeId.value=null;selectedEdgeId.value=null;
    history=[];historyIndex=-1;recordHistory();
@@ -315,6 +339,7 @@ async function saveLocal(){
         payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';
         localStorage.setItem(storageKey(),JSON.stringify(payload));
         localSavedAt.value=new Date().toLocaleTimeString('ko-KR');
+        clearImportedExecution(true);
         announce('서버 DB 저장 성공 · v'+data.version+' · 브라우저 백업 완료');
         await refreshStockVersions();
         return;
@@ -475,7 +500,9 @@ watch(()=>selectedNodeId.value,()=>{
             <button class="toolbar-btn" @click="fileInput?.click()" title="JSON 가져오기">⇧</button>
             <input ref="fileInput" type="file" accept=".json,application/json" class="visually-hidden" @change="onImport"/>
             <button class="toolbar-btn" @click="loadLocal" title="브라우저 저장값 불러오기">↺</button>
-            <button class="primary-btn" @click="saveLocal">▣ <span>{{stockMode?'서버 저장':'브라우저 저장'}}</span></button>
+            <button v-if="stockMode" class="toolbar-btn" title="공식 n8n 실행 결과 JSON 가져오기" @click="runFileInput?.click()">↳ <span>실행 결과</span></button>
+             <input v-if="stockMode" ref="runFileInput" type="file" accept=".json,application/json" class="visually-hidden" aria-label="n8n 실행 JSON 파일" @change="importN8nExecution"/>
+             <button class="primary-btn" @click="saveLocal">▣ <span>{{stockMode?'서버 저장':'브라우저 저장'}}</span></button>
           </div>
         </div>
         <div class="canvas-info">
@@ -542,6 +569,22 @@ watch(()=>selectedNodeId.value,()=>{
             <textarea class="field-control code-editor" v-model="inspectorJson" aria-label="노드 JSON 파라미터" spellcheck="false" rows="9"></textarea>
             <button class="secondary-btn full" @click="applyNodeSettings">설정 적용</button>
             <div class="position-panel"><span>X: {{Math.round(selectedNode.position.x)}}</span><span>Y: {{Math.round(selectedNode.position.y)}}</span></div>
+            <div v-if="stockMode&&importedExecution" data-testid="n8n-node-execution-inspector" style="margin:12px 0;border-top:1px solid #d5dde8;padding-top:12px;">
+              <div class="inspector-section-head"><b>n8n 노드 실행 기록</b><span>외부 JSON · 조회 전용</span></div>
+              <p v-if="!selectedExecutionResult">선택한 노드의 실행 기록이 없습니다.</p>
+              <template v-else>
+                <p><b>상태:</b> {{selectedExecutionResult.status}} · {{selectedExecutionResult.iterations}}회</p>
+                <p><b>실행시간:</b> {{selectedExecutionResult.executionTime??'확인 안 됨'}} ms</p>
+                <label class="field-label">노드 입력 (기록에 포함된 경우)</label>
+                <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:150px;overflow:auto;font-size:11px;">{{JSON.stringify(selectedExecutionResult.input,null,2)}}</pre>
+                <label class="field-label">노드 출력</label>
+                <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:190px;overflow:auto;font-size:11px;">{{JSON.stringify(selectedExecutionResult.output,null,2)}}</pre>
+                <template v-if="selectedExecutionResult.error">
+                  <label class="field-label">오류 정보</label>
+                  <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:150px;overflow:auto;color:#b11c38;font-size:11px;">{{JSON.stringify(selectedExecutionResult.error,null,2)}}</pre>
+                </template>
+              </template>
+            </div>
             <button class="danger-outline" @click="deleteSelected">⌫ 선택 노드 삭제</button>
           </template>
           <template v-else-if="selectedEdge">
@@ -565,6 +608,15 @@ watch(()=>selectedNodeId.value,()=>{
           <div v-for="(ev,i) in events" :key="i" class="activity-item"><span class="activity-marker"></span><div><b>{{ev.text}}</b><small>{{ev.time}}</small></div></div>
         </div>
         <div class="right-bottom">
+          <div v-if="stockMode" data-testid="n8n-execution-file-panel" style="padding:10px 4px;border-bottom:1px solid #d5dde8;margin-bottom:10px;">
+            <div style="font-weight:700;">n8n 실행 기록 보기 <small>조회 전용</small></div>
+            <p v-if="!importedExecution" style="font-size:12px;">공식 n8n에서 내보낸 실행 JSON을 상단 ‘실행 결과’로 불러오세요. 연결된 실행 서버는 없습니다.</p>
+            <template v-else>
+              <p style="font-size:12px;" data-testid="imported-run-status">실행 #{{importedExecution.id}} · {{importedExecution.status}} · 처리 {{importedExecution.executedCount}}개 · 오류 {{importedExecution.errorCount}}개</p>
+              <p style="font-size:11px;">외부 파일 (출처 미검증) · 실시간 실행 아님 · 브라우저 메모리에서만 조회</p>
+              <button class="toolbar-btn" @click="clearImportedExecution()">결과 표시 초기화</button>
+            </template>
+          </div>
           <div v-if="stockMode" data-testid="stock-version-history" style="padding:9px 4px 14px;border-bottom:1px solid #d8dfe8;margin-bottom:10px;">
             <div style="font-weight:700;margin-bottom:8px;">서버 변경 이력 <small>최근 {{stockVersionRows.length}}개 · 현재 v{{stockServerVersion}}</small></div>
             <p v-if="!stockServerAvailable" style="font-size:12px;">서버 연결이 없어 이력을 볼 수 없습니다.</p>
@@ -574,7 +626,7 @@ watch(()=>selectedNodeId.value,()=>{
               <button class="toolbar-btn" :data-restore-version="entry.version" @click="restoreStockVersion(entry.version)">복원</button>
             </div>
           </div>
-          <div class="run-title"><div><strong>{{stockMode?'실행 엔진 상태':'Test execution'}}</strong><small>{{stockMode?'공통 UI에 실제 실행 서버는 미연결 · 실제 주문 불가':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
+          <div class="run-title"><div><strong>{{stockMode?'실행 엔진 연결 상태':'Test execution'}}</strong><small>{{stockMode?'실제 실행 서버 미연결 · 안전하게 기록 파일 조회만 지원':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
           <button v-if="!stockMode" class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
           <button v-if="!stockMode" class="run-reset" @click="resetRun">실행 표시 초기화</button>
         </div>
