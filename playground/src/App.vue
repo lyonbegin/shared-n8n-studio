@@ -74,7 +74,7 @@ const NodeCard=defineComponent({
 });
 const nodeTypes={studio:NodeCard};
 const {fitView,zoomIn,zoomOut,screenToFlowCoordinate, getViewport}=useVueFlow({id:'shared-studio-playground'});
-const initial=makeTemplate('common');
+const initial=stockMode?{nodes:[],edges:[]}:makeTemplate('common');
 const nodes=ref(initial.nodes);
 const edges=ref(initial.edges);
 const selectedNodeId=ref(null);
