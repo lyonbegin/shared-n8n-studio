@@ -65,3 +65,25 @@ test('simulated execution is labeled and does not call business APIs',async({pag
   await expect(page.getByText(/모의 실행 완료/).first()).toBeVisible({timeout:15000});
   expect(requests).toEqual([]);
 });
+
+
+test('connect ports and verify graph counter',async({page})=>{
+  const before=await page.locator('.vue-flow__edge').count();
+  const src=await page.locator('.vue-flow__node').nth(3).locator('.port-out').boundingBox();
+  const dst=await page.locator('.vue-flow__node').nth(4).locator('.port-in').boundingBox();
+  await page.mouse.move(src.x+src.width/2,src.y+src.height/2);
+  await page.mouse.down();
+  await page.mouse.move(dst.x+dst.width/2,dst.y+dst.height/2,{steps:14});
+  await page.mouse.up();
+  await expect(page.locator('.vue-flow__edge')).toHaveCount(before+1);
+  await expect(page.locator('.canvas-stats')).toContainText((before+1)+' Connections');
+});
+test('add node changes counter; undo and redo restore graph',async({page})=>{
+  await page.getByRole('button',{name:/Code/}).first().click();
+  await expect(page.locator('.vue-flow__node')).toHaveCount(6);
+  await expect(page.locator('.canvas-stats')).toContainText('6 Nodes');
+  await page.locator('button[title="되돌리기"]').click();
+  await expect(page.locator('.vue-flow__node')).toHaveCount(5);
+  await page.locator('button[title="다시 실행"]').click();
+  await expect(page.locator('.vue-flow__node')).toHaveCount(6);
+});
