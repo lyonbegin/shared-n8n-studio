@@ -1,3 +1,11 @@
+## 50종 노드 계약 (추가 요구사항)
+
+공통 팔레트의 분류, 설정, 포트 규칙: [50종 노드 명세](./SHARED_NODE_50_SPEC_KO.md)  
+43개 PF 업무 블록·104 기능과 실제 연동 방법: [ProcureFlow 어댑터 구현 지침](./PROCUREFLOW_NODE_ADAPTER_GUIDE_KO.md)
+
+각 `N/H/Q/S/P/R/O` 업무 블록은 `Business Operation`의 `operationId`로 등록하고, PF00 상위 워크플로는 공식 n8n ExecuteWorkflow/IF/Merge 기반으로 운영합니다. 기존 API·Worker·공식 증빙 안전 규칙을 유지합니다.
+
+
 # ProcureFlow — 공통 n8n 편집기 도입 실행 지시서
 
 > 수신: `lyonbegin/procureflow` 프로젝트 작업 에이전트/개발자  
