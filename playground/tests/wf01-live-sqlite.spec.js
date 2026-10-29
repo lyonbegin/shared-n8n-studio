@@ -135,5 +135,5 @@ test('WF-01 step 5: edit real n8n jsCode JSON and restore exactly from SQLite',a
   expect(stored.workflow.nodes.find(n=>n.id==='입력 정규화').parameters).toEqual(patched);
   await page.reload();
   await page.locator('[data-node-id="입력 정규화"]').click();
-  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toContainText('WF01-SQLITE-E2E-CHECK');
+  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toHaveValue(/WF01-SQLITE-E2E-CHECK/);
 });
