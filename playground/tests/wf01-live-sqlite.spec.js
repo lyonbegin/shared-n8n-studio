@@ -69,3 +69,46 @@ test('WF-01 step 3: SQLite optimistic lock rejects stale update',async ({browser
   expect((await read.json()).version).toBe(next.version);
   await ctx.close();
 });
+
+test('WF-01 step 4: drag node, connect output handle, save edge and coordinates to SQLite',async ({page})=>{
+  await page.goto(ROOT+'/?workflow='+FLOW);
+  await expect(page.locator('[data-testid="studio-node"]')).toHaveCount(13);
+  const initial=await (await page.context().request.get(ROOT+API)).json();
+  const initialPoint=initial.workflow.nodes.find(n=>n.id==='wf01-trigger').position;
+  const originalEdges=12;
+  const sourceNode=page.locator('[data-node-id="wf01-trigger"]');
+  await page.locator('button[title="화면 맞춤"]').click();
+  const box=await sourceNode.boundingBox();
+  expect(box).not.toBeNull();
+  const x=box.x+box.width/2,y=box.y+box.height/2;
+  await page.mouse.move(x,y);
+  await page.mouse.down();
+  await page.mouse.move(x+42,y+24,{steps:12});
+  await page.mouse.up();
+  await expect(page.locator('.bottom-status')).toContainText('노드 위치 변경');
+  await page.locator('[data-node-kind="code"]').click();
+  await page.locator('button[title="화면 맞춤"]').click();
+  await expect(page.locator('[data-testid="studio-node"]')).toHaveCount(14);
+  const last=page.locator('[data-node-id^="node_"]').last();
+  const source=sourceNode.locator('.vue-flow__handle.source').last();
+  const target=last.locator('.vue-flow__handle.target').first();
+  const a=await source.boundingBox(), b=await target.boundingBox();
+  expect(a).not.toBeNull();
+  expect(b).not.toBeNull();
+  await page.mouse.move(a.x+a.width/2,a.y+a.height/2);
+  await page.mouse.down();
+  await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:18});
+  await page.mouse.up();
+  await expect(page.locator('.vue-flow__edge')).toHaveCount(originalEdges+1);
+  await page.locator('button.primary-btn').click();
+  await expect(page.locator('.bottom-status')).toContainText('서버 DB 저장 성공');
+  const saved=await (await page.context().request.get(ROOT+API)).json();
+  expect(saved.workflow.nodes.find(n=>n.id==='wf01-trigger').position).not.toEqual(initialPoint);
+  const edges=Object.values(saved.workflow.connections)
+    .flatMap(v=>Object.values(v).flatMap(port=>port.flat()));
+  expect(edges.length).toBe(originalEdges+1);
+  await page.reload();
+  await expect(page.locator('.vue-flow__edge')).toHaveCount(originalEdges+1);
+  await expect(page.locator('[data-testid="studio-node"]')).toHaveCount(14);
+  await page.screenshot({path:'test-results/wf01-drag-connect-restored.png',fullPage:true});
+});
