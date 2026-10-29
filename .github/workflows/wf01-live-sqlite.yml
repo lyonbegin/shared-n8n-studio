@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'playground/tests/wf01-live-sqlite.spec.js'
+      - 'playground/tests/wf01-detailed-editor.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
   push:
     branches: [feature/wf01-canvas-20261029]
     paths:
       - 'playground/tests/wf01-live-sqlite.spec.js'
+      - 'playground/tests/wf01-detailed-editor.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
 jobs:
