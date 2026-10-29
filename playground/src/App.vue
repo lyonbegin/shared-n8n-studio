@@ -6,12 +6,18 @@ import {Controls} from '@vue-flow/controls';
 import {MiniMap} from '@vue-flow/minimap';
 import {NODE_CATALOG,NODE_GROUPS,NODE_BY_KIND,defaultParameters,visibleFields,validateParameters} from './node-catalog.js';
 import {STOCK_WORKFLOWS,fromN8nWorkflow,toN8nWorkflow} from './investment-adapter.js';
+import {PROCURE_WORKFLOWS} from './procurement-adapter.js';
 import {readN8nExecutionFile} from './n8n-execution-inspector.js';
 
-const STOCK_MODE=import.meta.env.VITE_EDITOR_PROJECT==='investment';
+const STUDIO_PROJECT=import.meta.env.VITE_EDITOR_PROJECT;
+const IS_PROCUREMENT=STUDIO_PROJECT==='procurement';
+const STOCK_MODE=STUDIO_PROJECT==='investment'||IS_PROCUREMENT;
+const projectLabel=IS_PROCUREMENT?'조달청 자동화':'투자 자동화';
+const projectEnglish=IS_PROCUREMENT?'ProcureFlow':'Investment';
+const projectNoun=IS_PROCUREMENT?'조달청':'주식';
 const STORAGE_KEY='shared-n8n-studio:playground:v1';
 const stockMode=STOCK_MODE;
-const stockWorkflows=STOCK_WORKFLOWS;
+const stockWorkflows=IS_PROCUREMENT?PROCURE_WORKFLOWS:STOCK_WORKFLOWS;
 const stockFlow=ref(stockWorkflows[0][0]);
 const stockOriginal=ref(null);
 const stockServerVersion=ref(0);
@@ -20,7 +26,7 @@ const stockServerAvailable=ref(false);
 const stockVersionRows=ref([]);
 const importedExecution=ref(null);
 const runFileInput=ref(null);
-const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
+const storageKey=()=>stockMode?'shared-n8n-studio:'+STUDIO_PROJECT+':v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
 const paletteGroups=NODE_GROUPS;
 const paletteMap=NODE_BY_KIND;
@@ -254,12 +260,12 @@ async function importN8nExecution(event){
  }catch(err){announce('실행 결과 불러오기 실패: '+err.message);}
 }
 async function openStockFlow(file){
- if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
+ if(!stockMode||!stockWorkflows.some(([id])=>id===file))return;
  stockFlow.value=file;
  clearImportedExecution(true);
  // Persist route synchronously, not only after network fetch, to avoid
  // restoring a stale F01 when the user reloads immediately after an edit.
- localStorage.setItem('shared-n8n-studio:investment:selected',file);
+ localStorage.setItem('shared-n8n-studio:'+STUDIO_PROJECT+':selected',file);
  const route=new URL(window.location.href);
  route.searchParams.set('workflow',file);
  window.history.replaceState(null,'',route.pathname+route.search+route.hash);
@@ -282,7 +288,7 @@ async function openStockFlow(file){
      stockVersionRows.value=[];
      stockServerVersion.value=0;
      stockServerState.value='서버 연결 없음';
-     const response=await fetch('/stock-workflows/'+file,{cache:'no-store'});
+     const response=await fetch('/'+(IS_PROCUREMENT?'procure-workflows':'stock-workflows')+'/'+file,{cache:'no-store'});
      if(!response.ok)throw Error('원본 워크플로 HTTP '+response.status);
      data=fromN8nWorkflow(await response.json());
    }
@@ -299,10 +305,10 @@ async function openStockFlow(file){
    if(stockFlow.value!==file)return;
    stockOriginal.value=data.original;
    nodes.value=data.nodes.map(n=>({...n,data:{...n.data,state:'idle',stateSource:null}}));edges.value=data.edges;
-   workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
+   workflowName.value=data.workflowName||stockWorkflows.find(x=>x[0]===file)?.[1]||projectLabel+' 워크플로';
    selectedNodeId.value=null;selectedEdgeId.value=null;
    history=[];historyIndex=-1;recordHistory();
-   localStorage.setItem('shared-n8n-studio:investment:selected',file);
+   localStorage.setItem('shared-n8n-studio:'+STUDIO_PROJECT+':selected',file);
    announce((serverSource?'서버 저장본':stored?'브라우저 복구본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개 · '+stockServerState.value);
    if(stockServerAvailable.value)await refreshStockVersions(file);
    nextTick(()=>fitView({padding:.25,duration:150}));
@@ -336,7 +342,7 @@ async function saveLocal(){
         if(!res.ok){announce(res.status===409?'저장 충돌: 다른 탭에서 변경됨. 다시 불러와 주세요.':'서버 저장 실패: '+(data.error||res.status));return;}
         stockServerVersion.value=data.version;
         stockServerState.value='서버 v'+data.version;
-        payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';
+        payload.original=stockOriginal.value;payload.format='shared-n8n-studio:'+STUDIO_PROJECT+'/v1';
         localStorage.setItem(storageKey(),JSON.stringify(payload));
         localSavedAt.value=new Date().toLocaleTimeString('ko-KR');
         clearImportedExecution(true);
@@ -345,7 +351,7 @@ async function saveLocal(){
         return;
       }catch(e){announce('서버 연결 오류: '+e.message+' · 서버에는 저장되지 않았습니다');return;}
     }
-    payload.original=stockOriginal.value;payload.format='shared-n8n-studio:investment/v1';
+    payload.original=stockOriginal.value;payload.format='shared-n8n-studio:'+STUDIO_PROJECT+'/v1';
   }
   try{localStorage.setItem(storageKey(),JSON.stringify(payload));localSavedAt.value=new Date().toLocaleTimeString('ko-KR');announce(stockMode?'서버 미연결 · 브라우저에만 백업했습니다':'이 브라우저에 저장했습니다 (서버 저장 아님)');}
   catch(e){announce('브라우저 저장 실패: '+e.message);}
@@ -420,8 +426,8 @@ onMounted(()=>{
   recordHistory();
   if(stockMode){
     const path=new URLSearchParams(window.location.search).get('workflow');
-    const last=localStorage.getItem('shared-n8n-studio:investment:selected');
-    const chosen=STOCK_WORKFLOWS.some(x=>x[0]===path)?path:STOCK_WORKFLOWS.some(x=>x[0]===last)?last:STOCK_WORKFLOWS[0][0];
+    const last=localStorage.getItem('shared-n8n-studio:'+STUDIO_PROJECT+':selected');
+    const chosen=stockWorkflows.some(x=>x[0]===path)?path:stockWorkflows.some(x=>x[0]===last)?last:stockWorkflows[0][0];
     openStockFlow(chosen);
   }
   else nextTick(()=>fitView({padding:.23,duration:0}));
@@ -438,9 +444,9 @@ watch(()=>selectedNodeId.value,()=>{
       <div class="brand">
         <div class="brand-mark"><span></span><span></span><span></span><span></span></div>
         <div class="brand-text"><strong>n8n <em>Studio</em></strong><small>SHARED EDITOR LAB</small></div>
-        <span class="brand-divider"></span><span class="brand-trailing">{{stockMode?'투자 자동화 · 공통 편집기':'Playground'}}</span>
+        <span class="brand-divider"></span><span class="brand-trailing">{{stockMode?projectLabel+' · 공통 편집기':'Playground'}}</span>
       </div>
-      <div class="environment"><span class="pulse-dot"></span> {{stockMode?'주식 자동화 · 공통 n8n 모듈':'독립 테스트 환경'}} <span class="env-separator">/</span> <b>{{stockMode?'편집·데이터 어댑터':'LOCAL ONLY'}}</b></div>
+      <div class="environment"><span class="pulse-dot"></span> {{stockMode?projectNoun+' 자동화 · 공통 n8n 모듈':'독립 테스트 환경'}} <span class="env-separator">/</span> <b>{{stockMode?'편집·데이터 어댑터':'LOCAL ONLY'}}</b></div>
       <div class="top-actions">
         <button class="icon-btn outline" title="도움말" aria-label="도움말" @click="showHelp=!showHelp">?</button>
         <a class="github-link" href="https://github.com/lyonbegin/shared-n8n-studio" target="_blank" rel="noopener">GitHub <span>↗</span></a>
@@ -450,10 +456,10 @@ watch(()=>selectedNodeId.value,()=>{
       <aside class="left-panel">
         <div class="section-overline">WORKSPACE</div>
         <div class="project-tile">
-          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>{{stockMode?'Investment · 실제 13개 워크플로':'Canvas interaction test'}}</small></div><span class="project-menu">•••</span>
+          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>{{stockMode?projectEnglish+' · 실제 '+stockWorkflows.length+'개 워크플로':'Canvas interaction test'}}</small></div><span class="project-menu">•••</span>
         </div>
         <div class="sidebar-separator"></div>
-        <div class="section-heading"><b>{{stockMode?'투자 자동화 워크플로':'샘플 워크플로'}}</b><small>{{stockMode?13:3}}</small></div>
+        <div class="section-heading"><b>{{stockMode?projectLabel+' 워크플로':'샘플 워크플로'}}</b><small>{{stockMode?stockWorkflows.length:3}}</small></div>
         <div v-if="stockMode" class="sample-list" data-testid="stock-workflows">
           <button v-for="[file,label] in stockWorkflows" :key="file" class="sample-item" :class="{active:stockFlow===file}" :data-stock-flow="file" @click="openStockFlow(file)">
             <span class="sample-icon">↗</span><span><b>{{label}}</b><small>{{file.startsWith('operations')?'운영 워크플로':'시나리오 테스트'}}</small></span><span class="sample-chevron">›</span>
@@ -506,7 +512,7 @@ watch(()=>selectedNodeId.value,()=>{
           </div>
         </div>
         <div class="canvas-info">
-          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?'Investment · 13개 실제 워크플로':'Editor playground'}}</b></div>
+          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?projectEnglish+' · '+stockWorkflows.length+'개 실제 워크플로':'Editor playground'}}</b></div>
           <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?('DB '+(stockServerAvailable?'연결됨 · v'+stockServerVersion:'미연결')+' · 실행 비활성'):'모의 데이터 전용'}}</span></div>
         </div>
         <div class="canvas-holder" data-testid="canvas-holder" @dragover="onDragOver" @drop="onDrop">
@@ -520,12 +526,12 @@ watch(()=>selectedNodeId.value,()=>{
             <Controls position="bottom-left" :show-interactive="false"/>
             <MiniMap position="bottom-right" :node-color="n=>paletteMap[n.data.kind]?.color||'#8c9fb2'" :mask-color="'rgba(238,244,250,.72)'"/>
           </VueFlow>
-          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> {{stockMode?'INVESTMENT':'PLAYGROUND'}}</div>
+          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> {{stockMode?(IS_PROCUREMENT?'PROCUREFLOW':'INVESTMENT'):'PLAYGROUND'}}</div>
           <div class="canvas-controls-hint">좌클릭 드래그: 화면 이동 <span>·</span> Shift + 드래그: 다중 선택 <span>·</span> 노드 핸들: 연결</div>
         </div>
         <div class="bottom-bar">
           <span class="bottom-status"><span class="green-dot"></span>{{status}}</span>
-          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?(stockServerAvailable?'SQLite 서버 저장 · 투자 실행 차단':'서버 미연결 · 브라우저 저장만 가능'):'No API connected'}}</span>
+          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?(stockServerAvailable?'SQLite 초안 서버 저장 · 업무 실행 차단':'서버 미연결 · 브라우저 저장만 가능'):'No API connected'}}</span>
         </div>
       </section>
 
@@ -633,8 +639,8 @@ watch(()=>selectedNodeId.value,()=>{
       </aside>
     </div>
     <div v-if="showHelp" class="help-overlay" @click.self="showHelp=false"><div class="help-dialog">
-      <button class="help-close" @click="showHelp=false">×</button><span class="help-kicker">INTERACTION GUIDE</span><h2>{{stockMode?'주식 자동화 · 공통 n8n 편집기':'50종 노드 계약 플레이그라운드'}}</h2>
-      <p>{{stockMode?'주식 프로젝트의 실제 13개 n8n JSON을 공통 UI에서 편집하고 서버 DB에 저장할 수 있습니다. 실제 투자 주문 실행은 연결하지 않았습니다.':'공통 50종 노드의 팔레트·설정·포트 연결을 시험하는 별도 Vue Flow 프론트입니다. 공식 n8n 엔진과 실제 투자·조달 API에는 연결되지 않았습니다.'}}</p>
+      <button class="help-close" @click="showHelp=false">×</button><span class="help-kicker">INTERACTION GUIDE</span><h2>{{stockMode?projectLabel+' · 공통 Studio 편집기':'50종 노드 계약 플레이그라운드'}}</h2>
+      <p>{{stockMode?(IS_PROCUREMENT?'ProcureFlow PF00~PF15와 S01~S10의 원본 n8n JSON을 공용 Studio에서 편집하고 별도 초안 DB에 저장할 수 있습니다. 실제 공고 수집·입찰·투찰은 실행되지 않습니다.':'주식 프로젝트의 실제 13개 n8n JSON을 공통 UI에서 편집하고 서버 DB에 저장할 수 있습니다. 실제 투자 주문 실행은 연결하지 않았습니다.'):'공통 50종 노드의 팔레트·설정·포트 연결을 시험하는 별도 Vue Flow 프론트입니다. 공식 n8n 엔진과 실제 투자·조달 API에는 연결되지 않았습니다.'}}</p>
       <div class="help-grid"><div><b>01 / Pan</b><span>빈 캔버스 왼쪽/가운데 드래그</span></div><div><b>02 / Select</b><span>Shift + 드래그 / 노드 클릭</span></div><div><b>03 / Edit</b><span>노드 추가·이동·삭제·연결</span></div><div><b>04 / Save</b><span>브라우저 저장 / JSON 내보내기</span></div></div>
       <div class="help-caution">{{stockMode?'서버 SQLite 저장은 브라우저별 익명 초안입니다. 다른 기기에서 동일 초안에 접근하려면 로그인 연동이 필요합니다. 실제 n8n 실행 엔진은 연결 전입니다.':'모의 실행, 브라우저 저장 및 예제 데이터만 포함됩니다. n8n 서버 저장·실제 노드 실행 검증은 별도 단계입니다.'}}</div>
       <button class="primary-btn" @click="showHelp=false">테스트 시작</button>
