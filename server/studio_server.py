@@ -20,7 +20,11 @@ from threading import Lock
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(os.environ.get("STUDIO_STATIC_ROOT", "/app/dist")).resolve()
-WORKFLOW_ROOT = (ROOT / "stock-workflows").resolve()
+# Only the trusted image build selects the fixture directory; this is not a URL input.
+WORKFLOW_DIR = os.environ.get("STUDIO_WORKFLOW_DIR", "stock-workflows")
+if WORKFLOW_DIR not in ("stock-workflows", "procure-workflows"):
+    raise RuntimeError("Invalid workflow fixture directory")
+WORKFLOW_ROOT = (ROOT / WORKFLOW_DIR).resolve()
 DB_PATH = Path(os.environ.get("STUDIO_DB_PATH", "/data/studio.sqlite3"))
 PORT = int(os.environ.get("PORT", "3000"))
 MAX_BYTES = 1_048_576
