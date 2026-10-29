@@ -100,7 +100,7 @@ const selectedNode=computed(()=>nodes.value.find(n=>n.id===selectedNodeId.value)
 const selectedEdge=computed(()=>edges.value.find(e=>e.id===selectedEdgeId.value)||null);
 const selectedSpec=computed(()=>selectedNode.value?paletteMap[selectedNode.value.data.kind]:null);
 const selectedExecutionResult=computed(()=>selectedNode.value&&importedExecution.value?importedExecution.value.nodeResults[selectedNode.value.data.label]||null:null);
-const selectedFields=computed(()=>selectedSpec.value?visibleFields(selectedSpec.value,selectedNode.value?.data.parameters||{}):[]);
+const selectedFields=computed(()=>selectedSpec.value&&!(stockMode&&selectedNode.value?.data.n8n)?visibleFields(selectedSpec.value,selectedNode.value?.data.parameters||{}):[]);
 const catalogStats=computed(()=>({
  native:palette.filter(p=>p.implementation==='native').length,
  composite:palette.filter(p=>p.implementation==='composite').length,
@@ -204,7 +204,7 @@ function applyNodeSettings(){
     if(!parsed||Array.isArray(parsed)||typeof parsed!=='object')throw Error('JSON 객체가 필요합니다');
     const errors=validateParameters(n.data.kind,parsed);
     if(errors.length)throw Error(errors.join('; '));
-    n.data.parameters={...defaultParameters(n.data.kind),...parsed};
+    n.data.parameters=(stockMode&&n.data.n8n)?parsed:{...defaultParameters(n.data.kind),...parsed};
     recordHistory();announce('노드 설정을 적용했습니다');
   }catch(e){announce('설정 JSON 오류: '+e.message);}
 }
@@ -538,7 +538,7 @@ watch(()=>selectedNodeId.value,()=>{
             <label class="field-label">노드 이름</label>
             <input class="field-control" v-model="selectedNode.data.label" aria-label="노드 이름" @change="recordHistory"/>
             <label class="field-label">노드 유형</label>
-            <select class="field-control" v-model="selectedNode.data.kind" aria-label="노드 유형" @change="selectedNode.data.parameters=defaultParameters(selectedNode.data.kind);inspectorJson=JSON.stringify(selectedNode.data.parameters,null,2);recordHistory()">
+            <select class="field-control" v-model="selectedNode.data.kind" :disabled="Boolean(stockMode&&selectedNode.data.n8n)" aria-label="노드 유형" @change="selectedNode.data.parameters=defaultParameters(selectedNode.data.kind);inspectorJson=JSON.stringify(selectedNode.data.parameters,null,2);recordHistory()">
               <option v-for="p in palette" :key="p.kind" :value="p.kind">{{p.name}}</option>
             </select>
             <div class="contract-summary" v-if="selectedSpec" data-testid="node-contract">
@@ -551,6 +551,7 @@ watch(()=>selectedNodeId.value,()=>{
             <label class="field-label">설명</label>
             <textarea class="field-control" rows="2" v-model="selectedNode.data.description" @change="recordHistory"></textarea>
             <div class="inspector-section-head"><b>노드별 실행 설정</b><span>TYPE-CONTRACT</span></div>
+            <p v-if="stockMode&&selectedNode.data.n8n" class="field-label">원본 n8n 노드는 아래 전체 파라미터 JSON에서 정확히 편집하세요. 간이 입력 필드는 원본 스키마를 바꿀 수 있어 비활성화했습니다.</p>
             <div class="settings-fields" data-testid="settings-fields">
               <div v-for="field in selectedFields" :key="selectedNode.id+':'+field.key" class="settings-field">
                 <label class="field-label" :for="'setting-'+field.key">{{field.label}}</label>
