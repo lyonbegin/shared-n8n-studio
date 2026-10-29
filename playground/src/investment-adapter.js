@@ -6,6 +6,7 @@ const map=new Map(NODE_CATALOG.filter(x=>x.nativeType).map(x=>[x.nativeType,x.ki
 map.set('n8n-nodes-base.respondToWebhook','webhook');
 map.set('n8n-nodes-base.noOp','code');
 export const STOCK_WORKFLOWS=Object.freeze([
+ ['operations/WF01-pine-source-intake.json','WF-01 Pine 원본 등록·라이선스 검토'],
  ['operations/F01-strategy-sync.json','F01 전략 증분 수집'],
  ['operations/F03-agent-allocation.json','F03 에이전트 할당'],
  ['operations/F05-independent-audit.json','F05 독립 감사'],
