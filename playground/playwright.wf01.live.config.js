@@ -1,7 +1,7 @@
 import {defineConfig,devices} from '@playwright/test';
 export default defineConfig({
   testDir:'./tests',
-  testMatch:['wf01-live-sqlite.spec.js','wf01-detailed-editor.spec.js','wf02-live-sqlite.spec.js'],
+  testMatch:['wf01-live-sqlite.spec.js','wf01-detailed-editor.spec.js','wf02-live-sqlite.spec.js','wf01-one-per-mode.spec.js'],
   timeout:60000,
   expect:{timeout:15000},
   retries:1,
