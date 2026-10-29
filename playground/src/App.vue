@@ -143,6 +143,8 @@ function onNodeClick({node}){
     onConnect({source:from,target:node.id,sourceHandle:connectionStartPort.value,targetHandle:'main'});
   }
   selectedNodeId.value=node.id;selectedEdgeId.value=null;
+  const allowed=paletteMap[node.data.kind]?.outputs||['main'];
+  if(!allowed.includes(connectionStartPort.value))connectionStartPort.value=allowed[0];
   inspectorJson.value=JSON.stringify(node.data.parameters||{},null,2);
 }
 function beginNodeConnection(){
