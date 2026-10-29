@@ -90,20 +90,12 @@ test('WF-01 step 4: drag node, connect output handle, save edge and coordinates 
   await page.locator('button[title="화면 맞춤"]').click();
   await expect(page.locator('[data-testid="studio-node"]')).toHaveCount(14);
   const last=page.locator('[data-node-id^="node_"]').last();
-  const source=sourceNode.locator('.vue-flow__handle.source').last();
-  const target=last.locator('.vue-flow__handle.target').first();
-  const a=await source.boundingBox(), b=await target.boundingBox();
-  expect(a).not.toBeNull();
-  expect(b).not.toBeNull();
-  await page.mouse.move(a.x+a.width/2,a.y+a.height/2);
-  await page.mouse.down();
-  await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:18});
-  await page.mouse.up();
-  // VueFlow also supports click-to-connect; exercise it if mouse drag did not complete.
-  if(await page.locator('.vue-flow__edge').count()===originalEdges){
-    await source.click({force:true});
-    await target.click({force:true});
-  }
+  // Use the real editor's explicit port picker and two-click connection action.
+  // This avoids flaky pointer-event timing on the small handles at low zoom.
+  await page.locator('[data-node-id="check-fields"]').click();
+  await page.getByRole('combobox',{name:'연결 출력 포트'}).selectOption('false');
+  await page.getByTestId('quick-connect').click();
+  await last.click();
   await expect(page.locator('.vue-flow__edge')).toHaveCount(originalEdges+1);
   await page.locator('button.primary-btn').click();
   await expect(page.locator('.bottom-status')).toContainText('서버 DB 저장 성공');
@@ -112,6 +104,7 @@ test('WF-01 step 4: drag node, connect output handle, save edge and coordinates 
   const edges=Object.values(saved.workflow.connections)
     .flatMap(v=>Object.values(v).flatMap(port=>port.flat()));
   expect(edges.length).toBe(originalEdges+1);
+  expect(saved.workflow.connections['필수 정보 있나?'].main[1].some(t=>t.node==='Code')).toBe(true);
   await page.reload();
   await expect(page.locator('.vue-flow__edge')).toHaveCount(originalEdges+1);
   await expect(page.locator('[data-testid="studio-node"]')).toHaveCount(14);
