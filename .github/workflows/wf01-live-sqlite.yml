@@ -1,6 +1,11 @@
 name: WF01 deployed VueFlow + SQLite E2E
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'playground/tests/wf01-live-sqlite.spec.js'
+      - 'playground/playwright.wf01.live.config.js'
+      - '.github/workflows/wf01-live-sqlite.yml'
   push:
     branches: [feature/wf01-canvas-20261029]
     paths:
