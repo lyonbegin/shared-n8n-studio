@@ -82,6 +82,8 @@ const nodes=ref(initial.nodes);
 const edges=ref(initial.edges);
 const selectedNodeId=ref(null);
 const selectedEdgeId=ref(null);
+const connectionStartId=ref(null);
+const connectionStartPort=ref('main');
 const activeTab=ref('nodes');
 const search=ref('');
 const groupFilter=ref('all');
@@ -134,9 +136,23 @@ function announce(message){
   events.value.unshift({time:new Date().toLocaleTimeString('ko-KR'),text:message});
   if(events.value.length>20)events.value.pop();
 }
-function onNodeClick({node}){selectedNodeId.value=node.id;selectedEdgeId.value=null;inspectorJson.value=JSON.stringify(node.data.parameters||{},null,2);}
+function onNodeClick({node}){
+  if(connectionStartId.value && connectionStartId.value!==node.id){
+    const from=connectionStartId.value;
+    connectionStartId.value=null;
+    onConnect({source:from,target:node.id,sourceHandle:connectionStartPort.value,targetHandle:'main'});
+  }
+  selectedNodeId.value=node.id;selectedEdgeId.value=null;
+  inspectorJson.value=JSON.stringify(node.data.parameters||{},null,2);
+}
+function beginNodeConnection(){
+  if(!selectedNode.value)return;
+  connectionStartId.value=selectedNode.value.id;
+  announce('연결 시작 · 출력 '+connectionStartPort.value+' → 대상 노드를 클릭하세요');
+}
+function cancelNodeConnection(){connectionStartId.value=null;announce('연결 선택 취소');}
 function onEdgeClick({edge}){selectedEdgeId.value=edge.id;selectedNodeId.value=null;}
-function onPaneClick(){selectedNodeId.value=null;selectedEdgeId.value=null;}
+function onPaneClick(){selectedNodeId.value=null;selectedEdgeId.value=null;connectionStartId.value=null;}
 function onConnect(connection){
   if(!connection.source||!connection.target||connection.source===connection.target)return;
   if(edges.value.some(e=>e.source===connection.source&&e.target===connection.target&&e.sourceHandle===connection.sourceHandle&&e.targetHandle===connection.targetHandle))return;
@@ -256,6 +272,7 @@ async function importN8nExecution(event){
 async function openStockFlow(file){
  if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
  stockFlow.value=file;
+ connectionStartId.value=null;
  clearImportedExecution(true);
  // Persist route synchronously, not only after network fetch, to avoid
  // restoring a stale F01 when the user reloads immediately after an edit.
@@ -547,6 +564,14 @@ watch(()=>selectedNodeId.value,()=>{
               <span>입력: {{selectedSpec.inputs.join(', ')}} · 출력: {{selectedSpec.outputs.join(', ')}}</span>
               <span v-if="selectedSpec.nativeType">n8n 매핑: {{selectedSpec.nativeType}}</span>
               <span v-else>실제 실행 어댑터 미연결 (설계 계약)</span>
+            </div>
+            <div v-if="stockMode" class="settings-fields" data-testid="quick-connect-panel">
+              <label class="field-label">연결 출력 포트 선택</label>
+              <select class="field-control" aria-label="연결 출력 포트" v-model="connectionStartPort">
+                <option v-for="port in (selectedSpec?.outputs||['main'])" :key="port" :value="port">{{port}}</option>
+              </select>
+              <button class="secondary-btn full" data-testid="quick-connect" @click="beginNodeConnection">선 연결 시작 · 대상 노드 클릭</button>
+              <button v-if="connectionStartId" class="secondary-btn full" @click="cancelNodeConnection">연결 취소</button>
             </div>
             <label class="field-label">설명</label>
             <textarea class="field-control" rows="2" v-model="selectedNode.data.description" @change="recordHistory"></textarea>
