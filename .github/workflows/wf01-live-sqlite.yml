@@ -1,0 +1,35 @@
+name: WF01 deployed VueFlow + SQLite E2E
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/wf01-canvas-20261029]
+    paths:
+      - 'playground/tests/wf01-live-sqlite.spec.js'
+      - 'playground/playwright.wf01.live.config.js'
+      - '.github/workflows/wf01-live-sqlite.yml'
+jobs:
+  editor-sqlite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: playground
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Actual production VueFlow and per-browser SQLite persistence
+        run: npx playwright test --config=playwright.wf01.live.config.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wf01-live-sqlite-evidence
+          path: |
+            playground/test-results/
+            playground/playwright-report/
+          retention-days: 7
