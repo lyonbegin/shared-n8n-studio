@@ -25,6 +25,49 @@ const stockServerState=ref('');
 const stockServerAvailable=ref(false);
 const stockVersionRows=ref([]);
 const importedExecution=ref(null);
+const fixtureRun=ref(null);
+const fixtureError=ref('');
+const fixtureSuite=ref(null);
+function paintFixture(){
+ if(!fixtureRun.value)return;
+ const history=fixtureRun.value.events;
+ nodes.value=nodes.value.map(n=>{
+  const found=history.find(x=>n.data.label.includes(x.event)||n.data.label.includes(x.flow+' '));
+  return {...n,data:{...n.data,state:found?'success':'idle',stateSource:found?'fixture':''}};
+ });
+}
+async function beginFixture(){
+ if(!IS_PROCUREMENT)return;
+ fixtureError.value='';
+ if(!/^scenarios\/S(?:0[1-9]|10)\.json$/.test(stockFlow.value)){
+  fixtureError.value='S01~S10 시나리오에서만 모의 실행할 수 있습니다';return;
+ }
+ try{
+  if(!fixtureSuite.value){
+   const response=await fetch('/procure-workflows/fixture-scenarios.json',{cache:'no-store'});
+   if(!response.ok)throw Error('모의 시나리오 파일 없음');
+   fixtureSuite.value=await response.json();
+  }
+  if(fixtureSuite.value.origin!=='fictional_test_fixtures'||fixtureSuite.value.never_calls_official_api!==true)throw Error('안전한 테스트 원본 아님');
+  const id=stockFlow.value.split('/').pop().replace('.json','');
+  const spec=fixtureSuite.value.scenarios.find(x=>x.id===id);
+  if(!spec)throw Error('시나리오를 찾을 수 없음');
+  fixtureRun.value={id,executionId:'MOCK-'+Date.now().toString(36),status:'paused',cursor:0,events:[],
+   state:JSON.parse(JSON.stringify(fixtureSuite.value.base_state)),steps:spec.steps,expected:spec.expected};
+  paintFixture();announce(id+' 가상 단계 실행 준비');
+ }catch(e){fixtureError.value=String(e.message||e);}
+}
+function nextFixture(){
+ const r=fixtureRun.value;if(!r||r.status==='stopped'||r.cursor>=r.steps.length)return;
+ const s=r.steps[r.cursor],before=JSON.parse(JSON.stringify(r.state));
+ r.state={...r.state,...s.patch};
+ r.events=[...r.events,{sequence:r.cursor+1,flow:s.flow,event:s.event,input:before,output:JSON.parse(JSON.stringify(r.state)),simulationOnly:true}];
+ r.cursor++;r.status=r.cursor===r.steps.length?'completed':'paused';
+ fixtureRun.value={...r};paintFixture();announce('MOCK '+s.flow+' / '+s.event);
+}
+function runFixture(){if(!fixtureRun.value)return;while(fixtureRun.value.cursor<fixtureRun.value.steps.length&&fixtureRun.value.status!=='stopped')nextFixture();}
+function stopFixture(){if(fixtureRun.value)fixtureRun.value={...fixtureRun.value,status:'stopped'};}
+
 const runFileInput=ref(null);
 const storageKey=()=>stockMode?'shared-n8n-studio:'+STUDIO_PROJECT+':v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
@@ -632,6 +675,24 @@ watch(()=>selectedNodeId.value,()=>{
               <button class="toolbar-btn" :data-restore-version="entry.version" @click="restoreStockVersion(entry.version)">복원</button>
             </div>
           </div>
+          <section v-if="IS_PROCUREMENT" data-testid="procurement-fixture-panel" style="padding:12px;border:1px solid #a1aec0;border-radius:8px;margin:10px 0;">
+            <strong>격리 시나리오 실행 · MOCK ONLY</strong>
+            <p style="font-size:12px;">S01~S10 가상 입력만 사용 · 실제 n8n 엔진/G2B/투찰 호출 없음</p>
+            <button class="toolbar-btn" data-testid="mock-prepare" @click="beginFixture">모의 실행 준비</button>
+            <button class="toolbar-btn" data-testid="mock-next" :disabled="!fixtureRun||fixtureRun.status==='stopped'||fixtureRun.status==='completed'" @click="nextFixture">다음 단계</button>
+            <button class="toolbar-btn" data-testid="mock-run-all" :disabled="!fixtureRun||fixtureRun.status==='stopped'||fixtureRun.status==='completed'" @click="runFixture">끝까지 모의 실행</button>
+            <button class="toolbar-btn" data-testid="mock-stop" :disabled="!fixtureRun" @click="stopFixture">중지</button>
+            <p v-if="fixtureError" role="alert">{{fixtureError}}</p>
+            <template v-if="fixtureRun">
+              <p data-testid="mock-progress">{{fixtureRun.executionId}} · {{fixtureRun.status}} · {{fixtureRun.cursor}}/{{fixtureRun.steps.length}} · 예상 {{fixtureRun.expected}}</p>
+              <div style="max-height:230px;overflow:auto;font-size:11px;">
+                <div v-for="ev in fixtureRun.events" :key="ev.sequence">
+                  {{ev.sequence}}. {{ev.flow}} / {{ev.event}} · 모의 실행
+                  <details><summary>입출력 확인</summary><pre style="white-space:pre-wrap;">{{JSON.stringify({input:ev.input,output:ev.output},null,2)}}</pre></details>
+                </div>
+              </div>
+            </template>
+          </section>
           <div class="run-title"><div><strong>{{stockMode?'실행 엔진 연결 상태':'Test execution'}}</strong><small>{{stockMode?'실제 실행 서버 미연결 · 안전하게 기록 파일 조회만 지원':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
           <button v-if="!stockMode" class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
           <button v-if="!stockMode" class="run-reset" @click="resetRun">실행 표시 초기화</button>
