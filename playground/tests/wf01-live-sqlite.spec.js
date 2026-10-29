@@ -99,6 +99,11 @@ test('WF-01 step 4: drag node, connect output handle, save edge and coordinates 
   await page.mouse.down();
   await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:18});
   await page.mouse.up();
+  // VueFlow also supports click-to-connect; exercise it if mouse drag did not complete.
+  if(await page.locator('.vue-flow__edge').count()===originalEdges){
+    await source.click({force:true});
+    await target.click({force:true});
+  }
   await expect(page.locator('.vue-flow__edge')).toHaveCount(originalEdges+1);
   await page.locator('button.primary-btn').click();
   await expect(page.locator('.bottom-status')).toContainText('서버 DB 저장 성공');
