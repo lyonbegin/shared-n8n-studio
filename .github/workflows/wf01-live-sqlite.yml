@@ -6,6 +6,7 @@ on:
       - 'playground/tests/wf01-live-sqlite.spec.js'
       - 'playground/tests/wf01-detailed-editor.spec.js'
       - 'playground/tests/wf02-live-sqlite.spec.js'
+      - 'playground/tests/wf01-one-per-mode.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
   push:
@@ -14,6 +15,7 @@ on:
       - 'playground/tests/wf01-live-sqlite.spec.js'
       - 'playground/tests/wf01-detailed-editor.spec.js'
       - 'playground/tests/wf02-live-sqlite.spec.js'
+      - 'playground/tests/wf01-one-per-mode.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
 jobs:
@@ -40,6 +42,18 @@ jobs:
             fi
             if [ "$attempt" -eq 50 ]; then echo 'WF02 fixture not deployed'; exit 1; fi
             sleep 8
+          done
+      - name: Wait for the two new dedicated workflows in Railway
+        run: |
+          for kind in strategy library; do
+            for attempt in $(seq 1 45); do
+              if curl -fsS --max-time 10 "https://investment-n8n-native-editor-production.up.railway.app/api/studio/workflows/operations/WF01-latest-${kind}-one.json" | python3 -c 'import json,sys; obj=json.load(sys.stdin)["workflow"]; assert len(obj["nodes"])==16'; then
+                echo "WF01 ${kind} fixture available"
+                break
+              fi
+              if [ "$attempt" -eq 45 ]; then echo "${kind} not deployed"; exit 1; fi
+              sleep 8
+            done
           done
       - name: Actual production VueFlow and per-browser SQLite persistence
         run: npx playwright test --config=playwright.wf01.live.config.js
