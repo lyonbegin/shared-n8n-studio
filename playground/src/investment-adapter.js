@@ -6,6 +6,8 @@ const map=new Map(NODE_CATALOG.filter(x=>x.nativeType).map(x=>[x.nativeType,x.ki
 map.set('n8n-nodes-base.respondToWebhook','webhook');
 map.set('n8n-nodes-base.noOp','code');
 export const STOCK_WORKFLOWS=Object.freeze([
+ ['operations/WF01-latest-strategy-one.json','WF-01 · 전략만 최신순 신규 1개'],
+ ['operations/WF01-latest-library-one.json','WF-01 · 라이브러리만 최신순 신규 1개'],
  ['operations/WF02-pine-to-python.json','WF-02 상세 48노드 · Pine→Python 변환·동등성'],
  ['operations/WF01-pine-source-intake-v2.json','WF-01 상세 31노드 · 원본 등록·권리 재확인'],
  ['operations/WF01-pine-source-intake.json','WF-01 Pine 원본 등록·라이선스 검토'],
