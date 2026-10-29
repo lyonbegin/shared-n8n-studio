@@ -3,9 +3,17 @@ import {test,expect} from '@playwright/test';
 const ROOT='https://investment-n8n-native-editor-production.up.railway.app';
 const FLOW='operations/WF02-pine-to-python.json';
 const API='/api/studio/workflows/'+FLOW;
-const allEdges=workflow=>Object.entries(workflow.connections||{}).flatMap(([source,types])=>
-  Object.values(types).flatMap(outputs=>outputs.flatMap((targets,sourceIndex)=>
-    targets.map(t=>({source,target:t.node,sourceIndex,targetIndex:t.index}))));
+function allEdges(workflow) {
+  const edges=[];
+  for(const [source,outputTypes] of Object.entries(workflow.connections||{})) {
+    for(const outputs of Object.values(outputTypes)) {
+      outputs.forEach((targets,sourceIndex)=>{
+        for(const target of targets) edges.push({source,target:target.node,sourceIndex,targetIndex:target.index});
+      });
+    }
+  }
+  return edges;
+}
 
 test('WF02-01 live VueFlow 48 nodes, 50 edges, rights gate and parallel semantic merges',async ({page})=>{
   const runtimeErrors=[];
