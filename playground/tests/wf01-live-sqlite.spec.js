@@ -112,3 +112,23 @@ test('WF-01 step 4: drag node, connect output handle, save edge and coordinates 
   await expect(page.locator('[data-testid="studio-node"]')).toHaveCount(14);
   await page.screenshot({path:'test-results/wf01-drag-connect-restored.png',fullPage:true});
 });
+
+test('WF-01 step 5: edit real n8n jsCode JSON and restore exactly from SQLite',async ({page})=>{
+  await page.goto(ROOT+'/?workflow='+FLOW);
+  await expect(page.locator('[data-testid="studio-node"]')).toHaveCount(13);
+  const original=await (await page.context().request.get(ROOT+API)).json();
+  const codeNode=original.workflow.nodes.find(n=>n.id==='입력 정규화');
+  expect(codeNode).toBeTruthy();
+  await page.locator('[data-node-id="입력 정규화"]').click();
+  const field=page.getByRole('textbox',{name:'노드 JSON 파라미터'});
+  const patched={...codeNode.parameters,jsCode:codeNode.parameters.jsCode+'\\n// WF01-SQLITE-E2E-CHECK'};
+  await field.fill(JSON.stringify(patched,null,2));
+  await page.getByRole('button',{name:'설정 적용'}).click();
+  await page.locator('button.primary-btn').click();
+  await expect(page.locator('.bottom-status')).toContainText('서버 DB 저장 성공');
+  let stored=await (await page.context().request.get(ROOT+API)).json();
+  expect(stored.workflow.nodes.find(n=>n.id==='입력 정규화').parameters).toEqual(patched);
+  await page.reload();
+  await page.locator('[data-node-id="입력 정규화"]').click();
+  await expect(page.getByRole('textbox',{name:'노드 JSON 파라미터'})).toContainText('WF01-SQLITE-E2E-CHECK');
+});
