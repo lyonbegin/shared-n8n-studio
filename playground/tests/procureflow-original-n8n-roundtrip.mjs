@@ -35,6 +35,35 @@ for(const id of fixtureIds){
   results.push({id,nodes:graph.nodes.length,edges:graph.edges.length,custom:custom.length});
   total+=custom.length;
 }
+// Mutation round-trip: change an existing business operation node, preserving
+// its original n8n type, operation ID, success/HOLD output indices and neighbor edges.
+const pf05=JSON.parse(await readFile(join(operational,'PF05.json'),'utf8'));
+const editable=fromN8nWorkflow(pf05);
+const op=editable.nodes.find(n=>n.data.n8n?.type==='CUSTOM.procureFlowBusinessOperation'
+  &&editable.edges.some(e=>e.source===n.id&&e.data.n8nSourceIndex===1));
+assert(op,'PF05 needs a real 2-output Business Operation gate');
+const oldName=op.data.label;
+const newName=oldName+' · 검사편집';
+const revisedNodes=editable.nodes.map(n=>n.id!==op.id?n:{
+  ...n,position:{...n.position,x:n.position.x+115,y:n.position.y+35},
+  data:{...n.data,label:newName}
+});
+const changed=toN8nWorkflow({original:editable.original,nodes:revisedNodes,
+  edges:editable.edges,workflowName:editable.workflowName});
+const current=changed.nodes.find(n=>n.name===newName);
+assert(current,'Renamed native business gate must survive export');
+assert.equal(current.type,'CUSTOM.procureFlowBusinessOperation');
+assert.equal(current.parameters.operationId,op.data.parameters.operationId);
+assert.deepEqual(current.position,[op.position.x+115,op.position.y+35]);
+assert(!Object.hasOwn(changed.connections,oldName),'Old name must not leave dangling source edges');
+assert.deepEqual(changed.connections[newName]?.main,
+  pf05.connections[oldName]?.main,'Both native success/HOLD ports must be preserved by rename');
+assert.equal(changed.active,false);
+assert.equal(pf05.nodes.find(n=>n.id===op.id).name,oldName,'Original must be immutable');
+console.log('SHARED_N8N_STUDIO_NATIVE_EDIT_PORTS_RENAME_PASS',JSON.stringify({
+  renamed:op.data.parameters.operationId,outputs:changed.connections[newName].main.length
+}));
+
 assert.equal(results.length,26);
 assert.equal(total,43);
 console.log('SHARED_N8N_STUDIO_EXACT_26_ROUNDTRIP_PASS',JSON.stringify({workflows:26,customGates:43,totalNodes:results.reduce((n,x)=>n+x.nodes,0)}));
