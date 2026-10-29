@@ -1,10 +1,11 @@
-name: WF01 deployed VueFlow + SQLite E2E
+name: WF01+WF02 deployed VueFlow + SQLite E2E
 on:
   workflow_dispatch:
   pull_request:
     paths:
       - 'playground/tests/wf01-live-sqlite.spec.js'
       - 'playground/tests/wf01-detailed-editor.spec.js'
+      - 'playground/tests/wf02-live-sqlite.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
   push:
@@ -12,6 +13,7 @@ on:
     paths:
       - 'playground/tests/wf01-live-sqlite.spec.js'
       - 'playground/tests/wf01-detailed-editor.spec.js'
+      - 'playground/tests/wf02-live-sqlite.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
 jobs:
@@ -30,6 +32,15 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      - name: Wait for WF02 fixture on deployed Railway editor
+        run: |
+          for attempt in $(seq 1 50); do
+            if curl -fsS --max-time 12 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/workflows/operations/WF02-pine-to-python.json' | python3 -c 'import json,sys; w=json.load(sys.stdin)["workflow"]; assert len(w["nodes"])==48'; then
+              echo 'WF02 deployed fixture available'; break
+            fi
+            if [ "$attempt" -eq 50 ]; then echo 'WF02 fixture not deployed'; exit 1; fi
+            sleep 8
+          done
       - name: Actual production VueFlow and per-browser SQLite persistence
         run: npx playwright test --config=playwright.wf01.live.config.js
       - uses: actions/upload-artifact@v4
