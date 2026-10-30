@@ -1,0 +1,40 @@
+name: Shared Studio actual ProcureFlow 26-file n8n JSON roundtrip
+on:
+  pull_request:
+    paths:
+      - 'playground/src/investment-adapter.js'
+      - 'playground/src/node-catalog.js'
+      - 'playground/tests/procureflow-original-n8n-roundtrip.mjs'
+      - '.github/workflows/procureflow-roundtrip.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-json-roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: lyonbegin/procureflow
+          ref: 33bce35353c8858bafb99128dd9206a6f62691df
+          path: procureflow-source
+      - name: Compile PF00..PF15 exactly as editor Dockerfile does, offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PF_SOURCE="$RUNNER_TEMP/pf-input"
+          export PF_OUTPUT="$RUNNER_TEMP/pf-output"
+          mkdir -p "$PF_SOURCE"
+          cp -r procureflow-source/n8n/operational "$PF_SOURCE/procureflow-operational-workflows"
+          cp -r procureflow-source/n8n/workflows "$PF_SOURCE/procureflow-demo-workflows"
+          cp procureflow-source/n8n/operational_manifest.json "$PF_SOURCE/procureflow-operational-manifest.json"
+          node procureflow-source/n8n/source-build/compile-native-topology.mjs
+          node procureflow-source/n8n/source-build/test-native-topology.mjs
+          node procureflow-source/n8n/source-build/augment-business-operations.mjs
+          node procureflow-source/n8n/source-build/verify-packaged-graph.mjs
+          echo "PF_OPERATIONS_DIR=$PF_OUTPUT/operational" >> "$GITHUB_ENV"
+          echo "PF_SCENARIOS_DIR=$PF_SOURCE/procureflow-demo-workflows" >> "$GITHUB_ENV"
+      - name: Test actual 26 workflow n8n JSON structure round-trip (NO server, no database)
+        run: node playground/tests/procureflow-original-n8n-roundtrip.mjs
