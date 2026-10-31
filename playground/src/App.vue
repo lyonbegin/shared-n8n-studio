@@ -55,7 +55,7 @@ async function refreshGraphState(workflow=stockFlow.value){
 async function loadUpstreamForNode(id){
   upstreamForWorkspace.value=null;upstreamRunForWorkspace.value=null;
   const workflow=stockFlow.value;
-  if(!canExecuteSharedNode(id)||!id.endsWith('-02'))return;
+  if(!canExecuteSharedNode(id)||nodes.value.find(n=>n.id===id)?.data.parameters.studioPython?.node_character==='manual_collection_start')return;
   try{
     const response=await fetch('/api/studio/nodes/transfers?'+
       new URLSearchParams({workflow,node_id:id}),{credentials:'same-origin',cache:'no-store'});
@@ -117,8 +117,9 @@ async function executeConnectedNode(nodeId){
 }
 function runNodeFromWorkspace(input){
   const id=sharedWorkspaceNodeId.value;
-  if(id?.endsWith('-01'))return executeNode01(input,id);
-  if(id?.endsWith('-02'))return executeConnectedNode(id);
+  if(nodes.value.find(n=>n.id===id)?.data.parameters.studioPython?.node_character==='manual_collection_start')
+    return executeNode01(input,id);
+  if(canExecuteSharedNode(id))return executeConnectedNode(id);
 }
 
 const sharedWorkspaceNodeId=ref(null);
@@ -139,8 +140,8 @@ function canExecuteSharedNode(id){
   if(!stockMode)return false;
   const node=nodes.value.find(n=>n.id===id);
   const binding=node?.data?.parameters?.studioPython;
-  return !!(binding&&binding.python_module&&['execute_node01','execute_node02'].includes(binding.python_function)
-    &&(node.data.n8n?.type==='n8n-nodes-base.manualTrigger'||node.data.n8n?.type==='n8n-nodes-base.code'));
+  return !!(binding?.python_module&&binding?.python_function&&binding?.code_version
+    &&binding?.node_character&&node.data.n8n?.type);
 }
 function openSharedWorkspace(id){
   if(!stockMode)return;
@@ -149,7 +150,7 @@ function openSharedWorkspace(id){
   selectedNodeId.value=id;selectedEdgeId.value=null;
   sharedWorkspaceNodeId.value=id;sharedWorkspaceOpen.value=true;
   if(canExecuteSharedNode(id)){
-    if(id.endsWith('-01'))refreshNode01History();
+    if(node.data.parameters.studioPython?.node_character==='manual_collection_start')refreshNode01History();
     else refreshGenericNodeHistory(id);
     loadUpstreamForNode(id);
   }
@@ -157,7 +158,8 @@ function openSharedWorkspace(id){
 async function runSharedNodeFromCard(id){
   // Run stays on the canvas: only the explicit settings/history action opens the dialog.
   if(!canExecuteSharedNode(id)||node01Running.value)return;
-  if(id.endsWith('-02'))return executeConnectedNode(id);
+  if(nodes.value.find(n=>n.id===id)?.data.parameters.studioPython?.node_character!=='manual_collection_start')
+    return executeConnectedNode(id);
   const workflow=stockFlow.value;
   try{
     const query=new URLSearchParams({workflow,node_id:id});
@@ -274,7 +276,7 @@ const NodeCard=defineComponent({
     return ()=> {
       const meta=paletteMap[props.data.kind]||paletteMap.code;
       return h('div',{
-        class:['studio-node',props.selected?'is-selected':'',props.data.state==='success'?'is-success':'',props.data.state==='running'?'is-running':'',props.data.state==='error'?'is-error':''],
+        class:['studio-node',props.selected?'is-selected':'',props.data.state==='success'?'is-success':'',props.data.state==='running'?'is-running':'',props.data.state==='ready'?'is-ready':'',props.data.state==='error'?'is-error':''],
         'data-testid':'studio-node','data-node-id':props.id,
         style:{'--node-accent':meta.color}
       },[
