@@ -19,6 +19,55 @@ const stockServerState=ref('');
 const stockServerAvailable=ref(false);
 const stockVersionRows=ref([]);
 const importedExecution=ref(null);
+const node01InputJson=ref('{}');
+const node01Result=ref(null);
+const node01History=ref([]);
+const node01Running=ref(false);
+const node01Eligible=computed(()=>{
+  const n=selectedNode.value;
+  if(!stockMode||!n)return false;
+  const kind=stockFlow.value==='operations/WF01-latest-strategy-one.json'?'strategy':stockFlow.value==='operations/WF01-latest-library-one.json'?'library':null;
+  return Boolean(kind&&n.id==='wf01-'+kind+'-01'&&n.data.n8n?.type==='n8n-nodes-base.manualTrigger'
+    &&n.data.parameters?.studioPython?.python_function==='execute_node01');
+});
+function node01Mode(){return stockFlow.value.includes('latest-library-one')?'library':'strategy';}
+async function refreshNode01History(){
+  if(!node01Eligible.value)return;
+  const workflow=stockFlow.value, node_id=selectedNodeId.value;
+  try{
+    const query=new URLSearchParams({workflow,node_id});
+    const response=await fetch('/api/studio/node01/executions?'+query,{cache:'no-store',credentials:'same-origin'});
+    if(!response.ok)throw Error('실행 기록 HTTP '+response.status);
+    const data=await response.json();
+    if(stockFlow.value===workflow&&selectedNodeId.value===node_id)node01History.value=data.executions||[];
+  }catch(e){announce('N01 실행 기록 조회 실패: '+e.message);}
+}
+async function executeNode01(){
+  if(!node01Eligible.value||node01Running.value)return;
+  let input;
+  try{
+    input=JSON.parse(node01InputJson.value);
+    if(!input||typeof input!=='object'||Array.isArray(input))throw Error('INPUT은 JSON 객체여야 합니다');
+  }catch(e){announce('N01 입력 JSON 오류: '+e.message);return;}
+  node01Running.value=true;node01Result.value=null;
+  const workflow=stockFlow.value,node_id=selectedNodeId.value;
+  try{
+    const response=await fetch('/api/studio/node01/execute',{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json','X-Studio-Node-Run':'N01'},
+      body:JSON.stringify({workflow,node_id,input_json:input})
+    });
+    const result=await response.json();
+    if(!response.ok&&response.status!==422)throw Error(result.error||'HTTP '+response.status);
+    if(stockFlow.value!==workflow||selectedNodeId.value!==node_id)return;
+    node01Result.value=result;
+    nodes.value=nodes.value.map(n=>n.id===node_id?{...n,data:{...n.data,state:result.status==='SUCCESS'?'success':'error',stateSource:'python_node01'}}:n);
+    announce(result.status==='SUCCESS'?'N01 Python 단독 실행 성공 · SQLite 저장 · '+result.run_id:'N01 입력 검증 실패 · SQLite 기록 · '+result.error);
+    await refreshNode01History();
+  }catch(e){announce('N01 Python 실행 요청 오류: '+e.message);}
+  finally{node01Running.value=false;}
+}
+
 const runFileInput=ref(null);
 const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
@@ -146,6 +195,11 @@ function onNodeClick({node}){
   const allowed=paletteMap[node.data.kind]?.outputs||['main'];
   if(!allowed.includes(connectionStartPort.value))connectionStartPort.value=allowed[0];
   inspectorJson.value=JSON.stringify(node.data.parameters||{},null,2);
+  node01Result.value=null;node01History.value=[];
+  if(node01Eligible.value){
+    node01InputJson.value=JSON.stringify({ui_selection:node01Mode(),requested_detail_limit:1},null,2);
+    refreshNode01History();
+  }
 }
 function beginNodeConnection(){
   if(!selectedNode.value)return;
@@ -526,7 +580,7 @@ watch(()=>selectedNodeId.value,()=>{
         </div>
         <div class="canvas-info">
           <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?('Investment · '+stockWorkflows.length+'개 저장 가능한 워크플로'):'Editor playground'}}</b></div>
-          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?('DB '+(stockServerAvailable?'연결됨 · v'+stockServerVersion:'미연결')+' · 실행 비활성'):'모의 데이터 전용'}}</span></div>
+          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?('DB '+(stockServerAvailable?'연결됨 · v'+stockServerVersion:'미연결')+' · 전체 실행 비활성 · N01 단독 가능'):'모의 데이터 전용'}}</span></div>
         </div>
         <div class="canvas-holder" data-testid="canvas-holder" @dragover="onDragOver" @drop="onDrop">
           <VueFlow id="shared-studio-playground" v-model:nodes="nodes" v-model:edges="edges" :node-types="nodeTypes" :fit-view-on-init="true"
@@ -597,6 +651,27 @@ watch(()=>selectedNodeId.value,()=>{
             <textarea class="field-control code-editor" v-model="inspectorJson" aria-label="노드 JSON 파라미터" spellcheck="false" rows="9"></textarea>
             <button class="secondary-btn full" @click="applyNodeSettings">설정 적용</button>
             <div class="position-panel"><span>X: {{Math.round(selectedNode.position.x)}}</span><span>Y: {{Math.round(selectedNode.position.y)}}</span></div>
+            <div v-if="node01Eligible" data-testid="wf01-node01-python" style="margin:14px 0;padding:12px;border:1px solid #cbd6e5;border-radius:8px;">
+              <div class="inspector-section-head"><b>WF-01 N01 · Python 단독 실행</b><span>LIVE PYTHON · SQLite</span></div>
+              <p style="font-size:12px;">수집 대상 선택 노드만 실행합니다. TradingView 수집·다음 노드 실행·실거래는 하지 않습니다.</p>
+              <p style="font-size:11px;overflow-wrap:anywhere;" data-testid="node01-python-binding"><b>코드:</b> {{selectedNode.data.parameters.studioPython.python_module}}.{{selectedNode.data.parameters.studioPython.python_function}} · {{selectedNode.data.parameters.studioPython.code_version}}</p>
+              <label class="field-label">실행 INPUT JSON</label>
+              <textarea v-model="node01InputJson" class="field-control code-editor" spellcheck="false" aria-label="N01 입력 JSON" data-testid="node01-input" rows="6"></textarea>
+              <button class="primary-btn" style="width:100%;margin:10px 0;" :disabled="node01Running" data-testid="execute-node01" @click="executeNode01">{{node01Running?'Python 실행 중…':'▶ 이 노드 실행 (Python)'}}</button>
+              <div v-if="node01Result" data-testid="node01-result">
+                <p><b>실행 상태:</b> {{node01Result.status}} · {{node01Result.duration_ms}} ms · DB {{node01Result.persistence}}</p>
+                <p style="font-size:11px;overflow-wrap:anywhere;">실행 ID: {{node01Result.run_id}} · Python SHA256: {{node01Result.code_sha256}}</p>
+                <label class="field-label">실제 INPUT JSON</label>
+                <pre data-testid="node01-actual-input" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:180px;overflow:auto;">{{JSON.stringify(node01Result.input_json,null,2)}}</pre>
+                <label class="field-label">실제 OUTPUT JSON</label>
+                <pre data-testid="node01-output" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:260px;overflow:auto;">{{JSON.stringify(node01Result.output_json,null,2)}}</pre>
+                <p v-if="node01Result.error" data-testid="node01-error">오류: {{node01Result.error}}</p>
+              </div>
+              <p data-testid="node01-history-count" style="font-size:12px;">SQLite 저장된 최근 실행 {{node01History.length}}건</p>
+              <div v-if="node01History.length" data-testid="node01-latest-history" style="font-size:11px;overflow-wrap:anywhere;">
+                최근: {{node01History[0].run_id}} · {{node01History[0].status}} · {{node01History[0].created_at}}
+              </div>
+            </div>
             <div v-if="stockMode&&importedExecution" data-testid="n8n-node-execution-inspector" style="margin:12px 0;border-top:1px solid #d5dde8;padding-top:12px;">
               <div class="inspector-section-head"><b>n8n 노드 실행 기록</b><span>외부 JSON · 조회 전용</span></div>
               <p v-if="!selectedExecutionResult">선택한 노드의 실행 기록이 없습니다.</p>
@@ -654,7 +729,7 @@ watch(()=>selectedNodeId.value,()=>{
               <button class="toolbar-btn" :data-restore-version="entry.version" @click="restoreStockVersion(entry.version)">복원</button>
             </div>
           </div>
-          <div class="run-title"><div><strong>{{stockMode?'실행 엔진 연결 상태':'Test execution'}}</strong><small>{{stockMode?'실제 실행 서버 미연결 · 안전하게 기록 파일 조회만 지원':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
+          <div class="run-title"><div><strong>{{stockMode?'실행 엔진 연결 상태':'Test execution'}}</strong><small>{{stockMode?'전체 실행 미연결 · WF-01 N01 Python 단독 실행만 지원':'외부 API·실거래 없이 화면만 시뮬레이션'}}</small></div><span class="run-icon">◉</span></div>
           <button v-if="!stockMode" class="run-btn" :disabled="running||!nodeCount" @click="runSimulation">{{running?'◉ 실행 중…':'▶ 모의 실행'}}</button>
           <button v-if="!stockMode" class="run-reset" @click="resetRun">실행 표시 초기화</button>
         </div>
