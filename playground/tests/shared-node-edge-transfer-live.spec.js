@@ -47,3 +47,33 @@ for(const kind of ['strategy','library']){
    await page.screenshot({path:'test-results/'+kind+'-N01-N02-N03-data-lineage.png',fullPage:true});
  });
 }
+
+test('N02 saved manual input override changes output without modifying upstream N01',async({page})=>{
+ const workflow='operations/WF01-latest-strategy-one.json';
+ const n1='wf01-strategy-01',n2='wf01-strategy-02';
+ await page.goto(BASE+'/?workflow='+encodeURIComponent(workflow));
+ const first=page.locator('[data-node-id="'+n1+'"]'),second=page.locator('[data-node-id="'+n2+'"]');
+ await first.hover();await page.getByTestId('node-run-'+n1).click();
+ await expect(first.locator('.node-footer')).toContainText('Python 실행 성공');
+ await second.hover();await page.getByTestId('node-open-'+n2).click();
+ await expect(page.getByTestId('workspace-upstream-output')).toContainText('"sort": "recent_extended"');
+ await page.getByTestId('workspace-input').fill(JSON.stringify({page_size:25}));
+ await page.getByTestId('workspace-save-run').click();
+ await expect(page.getByTestId('workspace-run-output')).toContainText('"page_size": 25');
+ await expect(page.getByTestId('workspace-upstream-output')).not.toContainText('"page_size": 25');
+ await page.getByRole('button',{name:'노드 작업 공간 닫기'}).click();
+ await first.hover();await page.getByTestId('node-run-'+n1).click();
+ await expect(first.locator('.node-footer')).toContainText('Python 실행 성공');
+ await second.hover();await page.getByTestId('node-open-'+n2).click();
+ await page.getByTestId('workspace-input').fill(JSON.stringify({page_size:50}));
+ await page.getByTestId('workspace-save-run').click();
+ await expect(page.getByTestId('workspace-run-output')).toContainText('"page_size": 50');
+ await expect(page.getByTestId('workspace-output-diff')).toContainText('page_size');
+ await expect(page.getByTestId('workspace-output-diff')).toContainText('이전: 25');
+ await expect(page.getByTestId('workspace-output-diff')).toContainText('이번: 50');
+ const h=await(await page.context().request.get(BASE+'/api/studio/nodes/history?'+new URLSearchParams({workflow,node_id:n2}))).json();
+ expect(h.executions.length).toBe(2);
+ expect(h.executions[0].input_revision).toBe(2);
+ expect(h.executions[0].input_json.page_size).toBe(50);
+ expect(h.executions[1].input_json.page_size).toBe(25);
+});
