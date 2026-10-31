@@ -90,7 +90,16 @@ async function refreshNode01History(){
     const response=await fetch('/api/studio/node01/executions?'+query,{cache:'no-store',credentials:'same-origin'});
     if(!response.ok)throw Error('실행 기록 HTTP '+response.status);
     const data=await response.json();
-    if(stockFlow.value===workflow&&selectedNodeId.value===node_id)node01History.value=data.executions||[];
+    if(stockFlow.value===workflow&&selectedNodeId.value===node_id){
+      node01History.value=data.executions||[];
+      // Detail is opened on demand; reconstruct the latest real output from SQLite.
+      const latest=node01History.value[0];
+      if(latest&&node01Result.value?.run_id!==latest.run_id){
+        node01Result.value={...latest,run_id:latest.run_id,output_json:latest.output_json,
+          input_json:latest.input_json,duration_ms:latest.duration_ms,
+          status:latest.status,error:latest.error};
+      }
+    }
   }catch(e){announce('N01 실행 기록 조회 실패: '+e.message);}
 }
 async function executeNode01(overrideInput=null, targetNodeId=selectedNodeId.value){
