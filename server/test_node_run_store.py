@@ -46,7 +46,7 @@ class TestEdgeTransfer(unittest.TestCase):
         self.assertEqual(json.loads(original_a["output_json"]),original)
         st=latest_graph_state(db,"browser-a","operations/X.json")
         self.assertEqual({n["node_id"] for n in st["nodes"]},{"a","b"})
-        self.assertEqual([e["status"] for e in st["edges"]],["CONSUMED","READY"])
+        self.assertEqual({e["target_node_id"]:e["status"] for e in st["edges"]},{"b":"CONSUMED","c":"READY"})
         db.close()
 
     def test_cross_browser_cross_run_and_disconnected_source_blocked(self):
