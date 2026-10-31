@@ -371,7 +371,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
         if path == "/api/studio/health":
-            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "mode": "isolated-demo"})
+            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-node-workspace-v2", "mode": "isolated-demo"})
         if path == "/api/studio/nodes/workspace":
             return self._node_workspace("GET")
         if path == "/api/studio/nodes/workspace/revisions":
