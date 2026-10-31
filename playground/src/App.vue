@@ -22,6 +22,105 @@ const stockVersionRows=ref([]);
 const importedExecution=ref(null);
 const node01InputJson=ref('{}');
 const sharedWorkspaceOpen=ref(false);
+const upstreamForWorkspace=ref(null);
+const upstreamRunForWorkspace=ref(null);
+const nodeGraphRefresh=ref(0);
+const latestNodeResults=ref({});
+async function refreshGraphState(workflow=stockFlow.value){
+  if(!stockMode)return;
+  try{
+    const response=await fetch('/api/studio/nodes/graph-state?'+new URLSearchParams({workflow}),
+      {cache:'no-store',credentials:'same-origin'});
+    if(!response.ok)return;
+    const result=await response.json();
+    if(stockFlow.value!==workflow)return;
+    const latest=new Map((result.nodes||[]).map(n=>[n.node_id,n]));
+    const ready=new Set((result.edges||[]).filter(e=>e.status==='READY').map(e=>e.target_node_id));
+    nodes.value=nodes.value.map(n=>{
+      const existing=latest.get(n.id);
+      let state=existing?(existing.status==='SUCCESS'?'success':existing.status==='FAILED'?'error':'idle')
+        :ready.has(n.id)?'ready':'idle';
+      return {...n,data:{...n.data,state,
+        stateSource:existing?'node_run':ready.has(n.id)?'upstream_ready':null}};
+    });
+    edges.value=edges.value.map(e=>{
+      const transfer=(result.edges||[]).find(t=>t.source_node_id===e.source&&t.target_node_id===e.target);
+      if(!transfer)return {...e,style:{stroke:'#97a9bd',strokeWidth:2},animated:false};
+      return {...e,style:{stroke:transfer.status==='CONSUMED'?'#219653':'#1d94ca',strokeWidth:3},
+         animated:transfer.status==='READY',data:{...e.data,transferStatus:transfer.status}};
+    });
+    nodeGraphRefresh.value++;
+  }catch(e){announce('노드 실행 상태 복원 실패: '+e.message);}
+}
+async function loadUpstreamForNode(id){
+  upstreamForWorkspace.value=null;upstreamRunForWorkspace.value=null;
+  const workflow=stockFlow.value;
+  if(!canExecuteSharedNode(id)||!id.endsWith('-02'))return;
+  try{
+    const response=await fetch('/api/studio/nodes/transfers?'+
+      new URLSearchParams({workflow,node_id:id}),{credentials:'same-origin',cache:'no-store'});
+    if(!response.ok)return;
+    const data=await response.json();
+    if(workflow!==stockFlow.value||id!==sharedWorkspaceNodeId.value)return;
+    const item=(data.transfers||[])[0];
+    if(item){upstreamForWorkspace.value=item.output_json;upstreamRunForWorkspace.value=item.source_run_id;}
+  }catch(e){announce('앞 노드 데이터 조회 실패: '+e.message);}
+}
+async function refreshGenericNodeHistory(id){
+  const workflow=stockFlow.value;
+  try{
+    const r=await fetch('/api/studio/nodes/history?'+
+      new URLSearchParams({workflow,node_id:id}),{cache:'no-store',credentials:'same-origin'});
+    if(!r.ok)return;
+    const data=await r.json();
+    if(workflow===stockFlow.value&&id===selectedNodeId.value){
+      node01History.value=data.executions||[];
+      const latest=node01History.value[0];
+      if(latest){node01Result.value=latest;}
+    }
+  }catch(e){announce('실행 이력 조회 실패: '+e.message);}
+}
+async function executeConnectedNode(nodeId){
+  if(!canExecuteSharedNode(nodeId)||node01Running.value)return;
+  const workflow=stockFlow.value;
+  const query=new URLSearchParams({workflow,node_id:nodeId});
+  node01Running.value=true;
+  nodes.value=nodes.value.map(n=>n.id===nodeId?{...n,data:{...n.data,state:'running',stateSource:'node_run'}}:n);
+  try{
+    const tr=await fetch('/api/studio/nodes/transfers?'+query,{cache:'no-store',credentials:'same-origin'});
+    if(!tr.ok)throw Error('전달 입력 조회 HTTP '+tr.status);
+    const transferData=await tr.json();
+    const ready=(transferData.transfers||[]).find(t=>t.status==='READY');
+    if(!ready)throw Error('앞 노드에서 전달한 실행 데이터가 없습니다. N01을 먼저 실행하세요.');
+    const response=await fetch('/api/studio/nodes/execute',{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json','X-Studio-Node-Run':'APPROVED'},
+      body:JSON.stringify({workflow,node_id:nodeId,source_run_id:ready.source_run_id})
+    });
+    const result=await response.json();
+    if(!response.ok&&response.status!==422)throw Error(result.error||'HTTP '+response.status);
+    if(stockFlow.value!==workflow)return;
+    if(selectedNodeId.value===nodeId)node01Result.value=result;
+    announce(result.status==='SUCCESS'?'앞 노드 전체 OUTPUT 수신 → N02 Python 실행 및 다음 연결선 기록 완료':
+      'N02 실행 실패: '+result.error);
+    await refreshGraphState(workflow);
+    if(sharedWorkspaceOpen.value&&sharedWorkspaceNodeId.value===nodeId){
+      await refreshGenericNodeHistory(nodeId);
+      await loadUpstreamForNode(nodeId);
+    }
+  }catch(e){
+    if(stockFlow.value===workflow){
+      nodes.value=nodes.value.map(n=>n.id===nodeId?{...n,data:{...n.data,state:'error',stateSource:'node_run'}}:n);
+      announce('노드 실행 실패: '+e.message);
+    }
+  }finally{node01Running.value=false;}
+}
+function runNodeFromWorkspace(input){
+  const id=sharedWorkspaceNodeId.value;
+  if(id?.endsWith('-01'))return executeNode01(input,id);
+  if(id?.endsWith('-02'))return executeConnectedNode(id);
+}
+
 const sharedWorkspaceNodeId=ref(null);
 const sharedWorkspaceNode=computed(()=>nodes.value.find(n=>n.id===sharedWorkspaceNodeId.value)||null);
 const sharedWorkspaceDefaultInput=computed(()=>({
@@ -38,9 +137,10 @@ const sharedWorkspaceDraft=computed(()=>{
 });
 function canExecuteSharedNode(id){
   if(!stockMode)return false;
-  const kind=stockFlow.value.includes('WF01-latest-strategy-one')?'strategy':stockFlow.value.includes('WF01-latest-library-one')?'library':null;
   const node=nodes.value.find(n=>n.id===id);
-  return !!(kind && id==='wf01-'+kind+'-01' && node?.data?.parameters?.studioPython?.python_function==='execute_node01');
+  const binding=node?.data?.parameters?.studioPython;
+  return !!(binding&&binding.python_module&&['execute_node01','execute_node02'].includes(binding.python_function)
+    &&(node.data.n8n?.type==='n8n-nodes-base.manualTrigger'||node.data.n8n?.type==='n8n-nodes-base.code'));
 }
 function openSharedWorkspace(id){
   if(!stockMode)return;
@@ -48,11 +148,16 @@ function openSharedWorkspace(id){
   if(!node)return;
   selectedNodeId.value=id;selectedEdgeId.value=null;
   sharedWorkspaceNodeId.value=id;sharedWorkspaceOpen.value=true;
-  if(canExecuteSharedNode(id))refreshNode01History();
+  if(canExecuteSharedNode(id)){
+    if(id.endsWith('-01'))refreshNode01History();
+    else refreshGenericNodeHistory(id);
+    loadUpstreamForNode(id);
+  }
 }
 async function runSharedNodeFromCard(id){
   // Run stays on the canvas: only the explicit settings/history action opens the dialog.
   if(!canExecuteSharedNode(id)||node01Running.value)return;
+  if(id.endsWith('-02'))return executeConnectedNode(id);
   const workflow=stockFlow.value;
   try{
     const query=new URLSearchParams({workflow,node_id:id});
@@ -125,6 +230,7 @@ async function executeNode01(overrideInput=null, targetNodeId=selectedNodeId.val
     if(selectedNodeId.value===node_id)node01Result.value=result;
     nodes.value=nodes.value.map(n=>n.id===node_id?{...n,data:{...n.data,state:result.status==='SUCCESS'?'success':'error',stateSource:'python_node01'}}:n);
     announce(result.status==='SUCCESS'?'N01 Python 단독 실행 성공 · SQLite 저장 · '+result.run_id:'N01 입력 검증 실패 · SQLite 기록 · '+result.error);
+    await refreshGraphState(workflow);
     if(selectedNodeId.value===node_id)await refreshNode01History();
   }catch(e){
     if(stockFlow.value===workflow){
@@ -193,7 +299,7 @@ const NodeCard=defineComponent({
         ]),
         h('div',{class:'node-footer'},[
           h('span',{class:['node-status-dot',props.data.state||'idle']}),
-          h('span',props.data.stateSource==='execution_file'?(props.data.state==='error'?'실행 기록: 오류':props.data.state==='success'?'실행 기록: 성공':props.data.state==='running'?'실행 기록: 실행 중':'기록 없음'):props.data.state==='running'?'실행 중':props.data.state==='success'?(props.data.stateSource==='python_node01'?'Python 실행 성공':'모의 성공'):props.data.state==='error'?'실행 실패':'준비됨'),
+          h('span',props.data.stateSource==='execution_file'?(props.data.state==='error'?'실행 기록: 오류':props.data.state==='success'?'실행 기록: 성공':props.data.state==='running'?'실행 기록: 실행 중':'기록 없음'):props.data.state==='running'?'실행 중':props.data.state==='ready'?'입력 준비':props.data.state==='success'?(['python_node01','node_run'].includes(props.data.stateSource)?'Python 실행 성공':'모의 성공'):props.data.state==='error'?'실행 실패':'준비됨'),
           h('span',{class:'node-id'},props.id.replace(/^demo_.+?_/, '#'))
         ]),
         ...((meta.outputs||['main']).map((port,i)=>h(Handle,{type:'source',position:Position.Right,id:port,class:'port port-out',title:'출력: '+port,style:{top:((i+1)/(meta.outputs.length+1)*100)+'%'}})))
@@ -449,6 +555,8 @@ async function openStockFlow(file){
    if(stockFlow.value!==file)return;
    stockOriginal.value=data.original;
    nodes.value=data.nodes.map(n=>({...n,data:{...n.data,state:'idle',stateSource:null}}));edges.value=data.edges;
+   sharedWorkspaceOpen.value=false;upstreamForWorkspace.value=null;upstreamRunForWorkspace.value=null;
+   await refreshGraphState(file);
    workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
    selectedNodeId.value=null;selectedEdgeId.value=null;
    history=[];historyIndex=-1;recordHistory();
@@ -818,7 +926,8 @@ watch(()=>selectedNodeId.value,()=>{
        :default-draft="sharedWorkspaceDraft" :can-run="canExecuteSharedNode(sharedWorkspaceNodeId)"
        :running="node01Running" :run-result="canExecuteSharedNode(sharedWorkspaceNodeId)?node01Result:null"
        :run-history="canExecuteSharedNode(sharedWorkspaceNodeId)?node01History:[]"
-       @close="sharedWorkspaceOpen=false" @run="executeNode01" />
+       :upstream-input="upstreamForWorkspace" :upstream-run-id="upstreamRunForWorkspace"
+       @close="sharedWorkspaceOpen=false" @run="runNodeFromWorkspace" />
     <div v-if="showHelp" class="help-overlay" @click.self="showHelp=false"><div class="help-dialog">
       <button class="help-close" @click="showHelp=false">×</button><span class="help-kicker">INTERACTION GUIDE</span><h2>{{stockMode?'주식 자동화 · 공통 n8n 편집기':'50종 노드 계약 플레이그라운드'}}</h2>
       <p>{{stockMode?'주식 프로젝트의 실제 13개 n8n JSON을 공통 UI에서 편집하고 서버 DB에 저장할 수 있습니다. 실제 투자 주문 실행은 연결하지 않았습니다.':'공통 50종 노드의 팔레트·설정·포트 연결을 시험하는 별도 Vue Flow 프론트입니다. 공식 n8n 엔진과 실제 투자·조달 API에는 연결되지 않았습니다.'}}</p>
