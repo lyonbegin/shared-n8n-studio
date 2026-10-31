@@ -9,6 +9,7 @@ on:
       - 'playground/tests/wf01-one-per-mode.spec.js'
       - 'playground/tests/wf01-node01-python.spec.js'
       - 'playground/tests/shared-node-workspace-live.spec.js'
+      - 'playground/tests/shared-node-inline-execute.spec.js'
       - 'playground/src/SharedNodeWorkspace.vue'
       - 'playground/src/App.vue'
       - 'playground/src/style.css'
@@ -26,6 +27,7 @@ on:
       - 'playground/tests/wf01-one-per-mode.spec.js'
       - 'playground/tests/wf01-node01-python.spec.js'
       - 'playground/tests/shared-node-workspace-live.spec.js'
+      - 'playground/tests/shared-node-inline-execute.spec.js'
       - 'playground/src/SharedNodeWorkspace.vue'
       - 'playground/src/App.vue'
       - 'playground/src/style.css'
@@ -92,7 +94,7 @@ jobs:
       - name: Wait for Railway N01 Python execution deployment
         run: |
           for attempt in $(seq 1 50); do
-            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("nodeUiControlsRelease") == "shared-node-workspace-v2"'; then
+            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("nodeUiControlsRelease") == "shared-node-workspace-v3-inline-run"'; then
               echo 'N01 backend Python executor is live'
               break
             fi
