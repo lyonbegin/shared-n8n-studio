@@ -558,10 +558,13 @@ async function openStockFlow(file){
    stockOriginal.value=data.original;
    nodes.value=data.nodes.map(n=>({...n,data:{...n.data,state:'idle',stateSource:null}}));edges.value=data.edges;
    sharedWorkspaceOpen.value=false;upstreamForWorkspace.value=null;upstreamRunForWorkspace.value=null;
-   await refreshGraphState(file);
    workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
    selectedNodeId.value=null;selectedEdgeId.value=null;
    history=[];historyIndex=-1;recordHistory();
+   // Finish selection reset before the asynchronous run-state restore.
+   // Otherwise users clicking the just-rendered node lose their inspector
+   // when the pending graph-state GET eventually resolves.
+   await refreshGraphState(file);
    localStorage.setItem('shared-n8n-studio:investment:selected',file);
    announce((serverSource?'서버 저장본':stored?'브라우저 복구본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개 · '+stockServerState.value);
    if(stockServerAvailable.value)await refreshStockVersions(file);
