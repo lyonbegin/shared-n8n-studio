@@ -712,7 +712,7 @@ watch(()=>selectedNodeId.value,()=>{
               <p style="font-size:11px;overflow-wrap:anywhere;" data-testid="node01-python-binding"><b>코드:</b> {{selectedNode.data.parameters.studioPython.python_module}}.{{selectedNode.data.parameters.studioPython.python_function}} · {{selectedNode.data.parameters.studioPython.code_version}}</p>
               <label class="field-label">실행 INPUT JSON</label>
               <textarea v-model="node01InputJson" class="field-control code-editor" spellcheck="false" aria-label="N01 입력 JSON" data-testid="node01-input" rows="6"></textarea>
-              <button class="primary-btn" style="width:100%;margin:10px 0;" :disabled="node01Running" data-testid="execute-node01" @click="executeNode01">{{node01Running?'Python 실행 중…':'▶ 이 노드 실행 (Python)'}}</button>
+              <button class="primary-btn" style="width:100%;margin:10px 0;" :disabled="node01Running" data-testid="execute-node01" @click="executeNode01()">{{node01Running?'Python 실행 중…':'▶ 이 노드 실행 (Python)'}}</button>
               <div v-if="node01Result" data-testid="node01-result">
                 <p><b>실행 상태:</b> {{node01Result.status}} · {{node01Result.duration_ms}} ms · DB {{node01Result.persistence}}</p>
                 <p style="font-size:11px;overflow-wrap:anywhere;">실행 ID: {{node01Result.run_id}} · Python SHA256: {{node01Result.code_sha256}}</p>
