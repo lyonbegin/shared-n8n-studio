@@ -43,3 +43,8 @@
   opacity:1!important;pointer-events:auto!important;transition:none!important;z-index:1;
   box-shadow:none;border:0;border-bottom:1px solid #d3deea;border-radius:7px 7px 0 0;
   padding:5px 6px;justify-content:space-between}
+
+/* Actual upstream transfer committed to SQLite; target is READY but not executed. */
+.studio-node.is-ready{border-color:#1d94ca!important;box-shadow:0 0 0 2px #1d94ca22!important}
+.studio-node .node-status-dot.ready{background:#1d94ca}
+.studio-node.is-running{border-color:#267bd6!important}
