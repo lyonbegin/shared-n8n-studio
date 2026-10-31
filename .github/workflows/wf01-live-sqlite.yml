@@ -8,6 +8,11 @@ on:
       - 'playground/tests/wf02-live-sqlite.spec.js'
       - 'playground/tests/wf01-one-per-mode.spec.js'
       - 'playground/tests/wf01-node01-python.spec.js'
+      - 'playground/tests/shared-node-workspace-live.spec.js'
+      - 'playground/src/SharedNodeWorkspace.vue'
+      - 'server/node_workspace_store.py'
+      - 'server/studio_server.py'
+      - 'server/test_studio_server.py'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
   push:
@@ -18,6 +23,11 @@ on:
       - 'playground/tests/wf02-live-sqlite.spec.js'
       - 'playground/tests/wf01-one-per-mode.spec.js'
       - 'playground/tests/wf01-node01-python.spec.js'
+      - 'playground/tests/shared-node-workspace-live.spec.js'
+      - 'playground/src/SharedNodeWorkspace.vue'
+      - 'server/node_workspace_store.py'
+      - 'server/studio_server.py'
+      - 'server/test_studio_server.py'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
 jobs:
@@ -59,7 +69,8 @@ jobs:
           done
       - name: N01 Python source compile and real handler contract
         run: |
-          python3 -m py_compile ../server/studio_server.py ../server/wf01_node_executor.py
+          python3 -m py_compile ../server/studio_server.py ../server/wf01_node_executor.py ../server/node_workspace_store.py
+          python3 -m unittest discover -s ../server -p 'test_studio_server.py'
           PYTHONPATH=../server python3 - <<'PY'
           from wf01_node_executor import execute_node01
           for kind in ('strategy','library'):
@@ -77,7 +88,7 @@ jobs:
       - name: Wait for Railway N01 Python execution deployment
         run: |
           for attempt in $(seq 1 50); do
-            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("node01ExecutionEnabled") is True'; then
+            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("nodeWorkspaceVersioned") is True'; then
               echo 'N01 backend Python executor is live'
               break
             fi
