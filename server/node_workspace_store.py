@@ -54,7 +54,7 @@ def validate_execution_draft(value):
         if len(v) > limit:
             raise ValueError("EXECUTION_FIELD_TOO_LARGE: " + field)
         out[field] = v
-    if kind == "http" and out["api_url"]:
+    if kind == "http" and out["api_url"] and not out["api_url"].startswith("={{"):
         url = urlsplit(out["api_url"])
         if url.scheme not in ("https", "http") or not url.netloc or url.username or url.password:
             raise ValueError("INVALID_API_URL")
