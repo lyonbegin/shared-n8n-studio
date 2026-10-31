@@ -18,7 +18,9 @@
 - `playground/src/style.css`: 노드 상단 도구모음 디자인·드래그 충돌 방지.
 - `server/node_workspace_store.py`: 프로젝트 중립적인 SQLite 이력 테이블, 버전 충돌 방지, JSON/URL 초안 검증.
 - `server/studio_server.py`: `/api/studio/nodes/workspace` 및 `/revisions` HTTP 컨트롤러.
-- `server/wf01_node_executor.py`: **기존 호환성용 투자 전용** N01 실행 함수. 공통 인터페이스로 오해하면 안 됩니다. 향후 프로젝트 어댑터로 이전할 항목입니다.
+- `server/node_run_store.py`: 모든 프로젝트에 공통인 노드 INPUT/OUTPUT 및 실제 연결선 전달 이력.
+- `server/project_adapter_runtime.py`: 소비 프로젝트의 명시적 승인 실행 어댑터를 로드하는 제한된 인터페이스.
+- **실제 주식 업무 Python 코드는 공통 저장소에 없습니다.** `autonomous-investor-backend/n8n/editor-adapter/investment_node_adapter.py`로 이전했습니다.
 
 ## HTTP 계약
 
@@ -59,7 +61,7 @@ PUT `/api/studio/nodes/workspace`:
 - execution id, input revision, output artifact, success/error, duration
 - abort support, replay protection, output sanitization
 
-주식 자동화에는 현재 하위 호환을 위해 WF01 N01 하나만 서버 Python 함수 `execute_node01`로 실행 가능합니다. 다른 노드의 버튼은 비활성. 등록되지 않은 실행 코드를 DB에서 불러와 실행하지 않습니다.
+주식 자동화는 `STUDIO_PROJECT_ADAPTER=investment_node_adapter`를 지정하고, 프로젝트가 승인한 WF01 N01 `execute_node01`, N02 `execute_node02`를 사용합니다. N01→N02 연결선에는 N01의 전체 OUTPUT·실행 ID·동일 브라우저 세션이 보존되고, N02가 성공하면 N03 INPUT이 READY가 됩니다. N03은 아직 실행 어댑터가 없으므로 비활성입니다. DB 저장 초안으로 임의 코드를 실행할 수 없습니다.
 
 ## 동일 모듈을 다른 프로젝트에 적용하는 순서
 
@@ -73,8 +75,22 @@ PUT `/api/studio/nodes/workspace`:
 ## 현재 확인된 미완료
 
 - 공식 n8n 2.x 전체 실행 엔진과 자동 연결된 것은 아님.
-- 공통 프로젝트 전역 `executionRegistry` 도입, WF01 특화 서버 코드의 완전 분리, 다른 프로젝트 통합 테스트는 후속 작업.
+- 과거 N01 호환 REST 엔드포인트 이름과 주식 워크플로 선택 화면의 일부 코드는 여전히 존재합니다. 타 프로젝트 재사용 시 공식 엔진/어댑터 목록의 완전한 분리와 인증·권한 설계가 추가로 필요합니다.
 - 임의 Python/HTTP 코드 핫스왑 실행이나 실제 TradingView 수집 기능은 없음.
 - 실제 브라우저 E2E 결과와 Railway 배포 상태는 별도 검증 필요.
 
 이 경계를 지키면 공통 노드 UI와 이력 저장을 재사용하면서도 각 프로젝트의 인증과 실행 엔진을 분리할 수 있습니다.
+
+## 노드 간 실제 OUTPUT 전달 (공통 runtime v1)
+
+- `node_runs`: `sid + workflow_path + run_id` 단위 실제 실행의 입력·출력·성공/실패·코드 SHA·input_revision 기록.
+- `edge_transfers`: 원본 워크플로 `connections`에 존재하는 연결에만 `source_run_id`, 전체 `output_json`, 대상 노드/포트, `READY/CONSUMED` 기록.
+- `GET /api/studio/nodes/transfers?workflow=...&node_id=...`: 다음 노드의 대기 입력 조회.
+- `POST /api/studio/nodes/execute`: 프로젝트가 승인한 연결 노드만 실행. `X-Studio-Node-Run: APPROVED` 및 `source_run_id` 필수. 같은 sid, 같은 workflow, 원본 연결선 및 성공 실행 조건 검증.
+- `GET /api/studio/nodes/graph-state?workflow=...`: 노드·선의 DB 상태 복원.
+- `GET /api/studio/nodes/history?workflow=...&node_id=...`: 실제 노드 입력/출력 이력.
+- *원본 N01 OUTPUT은 불변*: 다음 노드에서 수동 편집한 `input_json`은 새 input revision으로 별도 저장하며, 다음 노드 실행 때만 결합합니다.
+- 노드 위 ▶ 실행은 모달 없이 단독 실행, 이전 결과·앞 노드 변수는 ⚙ 설정·이력에서 확인합니다.
+- 공통 런타임은 Pine/주식/조달 업무를 몰라도 됩니다. 종목/종류/정렬·page_size 검증과 실제 Python 코드는 소비 프로젝트에 둡니다.
+
+현재 구현은 **하나의 앞 노드→다음 노드(직렬 경로)의 입력·출력 전달**을 검증하기 위한 것입니다. 복수 입력 Merge, 병렬 실행 정책, 일반 n8n 실행기 연동, 실제 TradingView 수집은 별도 구현 범위입니다.
