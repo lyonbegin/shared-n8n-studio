@@ -29,7 +29,9 @@ for (const kind of modes) {
    expect(w.nodes).toHaveLength(16);
    expect(linkCount(w)).toBe(16);
    const byId=n=>w.nodes.find(x=>x.id===id(kind,n));
-   expect(byId(2).parameters.jsCode).toContain('page:1');
+   expect(byId(2).parameters.jsCode).toContain('$input.all()');
+   expect(byId(2).parameters.jsCode).toContain('...input');
+   expect(byId(2).parameters.studioPython.python_function).toBe('execute_node02');
    expect(byId(3).parameters.url).toContain('kind='+kind);
    expect(byId(3).parameters.url).toContain('sort=updated_desc');
    expect(byId(5).parameters.url).toContain('check-batch');
@@ -68,9 +70,15 @@ for (const kind of modes) {
    const done=fn({all:()=>[{json:{kind,page:20,next_page:21,max_pages:20,items:[latest]}}]})[0].json;
    expect(done.has_candidate).toBe(false);
    expect(done.can_continue).toBe(false);
-   const initial=new Function('$input',w.nodes.find(x=>x.id===id(kind,2)).parameters.jsCode)({});
-   expect(initial[0].json.page).toBe(1);
-   expect(initial[0].json.kind).toBe(kind);
+   // N02 must now receive the previous node's ACTUAL entire output rather
+   // than hardcoding page/max_pages/sort in an isolated empty $input call.
+   const n1Output={
+     kind,page:1,max_pages:3,max_detail_success:1,sort:'recent_extended',
+     execution_mode:'ONE_NODE_ONLY',tradingview_requested:false,next_node_executed:false
+   };
+   const initial=new Function('$input',w.nodes.find(x=>x.id===id(kind,2)).parameters.jsCode)(
+     {all:()=>[{json:n1Output}]});
+   expect(initial[0].json).toMatchObject({...n1Output,page_size:50,selected_count:0});
  });
 
  test('WF01 '+kind+' ONLY: edit one real Code node; SQLite save and reload',async ({page})=>{
