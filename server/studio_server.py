@@ -15,6 +15,7 @@ import inspect
 import time
 from urllib.parse import parse_qs
 from wf01_node_executor import execute_node01
+from node_workspace_store import (init_workspace_db, get_workspace, update_workspace, list_workspace_revisions)
 import mimetypes
 import os
 from pathlib import Path
@@ -55,6 +56,7 @@ def init_db():
             duration_ms REAL NOT NULL, created_at TEXT NOT NULL
         )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_node01_recent ON node01_executions(sid, workflow_path, node_id, created_at DESC)")
+        init_workspace_db(db)
 
 WF01_N01_BINDING = {
     "python_module": "wf01_node_executor",
@@ -232,6 +234,52 @@ class Handler(BaseHTTPRequestHandler):
             db.commit()
         return self._json(200, {"ok": True, "version": new_version, "updatedAt": now, "source": "server"}, sid, new_cookie)
 
+    def _node_workspace(self, method, history=False):
+        sid,new_cookie=self._sid()
+        if method=="PUT" and self.headers.get("Origin"):
+            try:
+                origin=urlsplit(self.headers["Origin"])
+                if origin.netloc!=self.headers.get("Host") or origin.scheme not in ("http","https"):
+                    return self._json(403,{"error":"CROSS_ORIGIN_FORBIDDEN"},sid,new_cookie)
+            except ValueError:
+                return self._json(403,{"error":"INVALID_ORIGIN"},sid,new_cookie)
+        try:
+            if method=="PUT":
+                if not self.headers.get("Content-Type","").startswith("application/json"):
+                    return self._json(415,{"error":"JSON_CONTENT_TYPE_REQUIRED"},sid,new_cookie)
+                size=int(self.headers.get("Content-Length","0"))
+                if size<2 or size>65_536:
+                    return self._json(413,{"error":"NODE_CONFIG_TOO_LARGE"},sid,new_cookie)
+                req=json.loads(self.rfile.read(size))
+            else:
+                query=parse_qs(urlsplit(self.path).query)
+                req={k:v[0] for k,v in query.items() if v}
+            if not isinstance(req,dict):
+                raise ValueError("REQUEST_OBJECT_REQUIRED")
+            path,node_id=req.get("workflow"),req.get("node_id")
+            if not isinstance(path,str) or not isinstance(node_id,str):
+                raise ValueError("WORKFLOW_AND_NODE_REQUIRED")
+            fixture=fixture_path(path)
+            with db_connect() as db:
+                saved=db.execute("SELECT payload FROM snapshots WHERE sid=? AND path=?",(sid,path)).fetchone()
+            workflow=json.loads(saved["payload"]) if saved else json.loads(fixture.read_text())
+            if not any(node.get("id")==node_id for node in workflow.get("nodes",[])):
+                return self._json(404,{"error":"NODE_NOT_IN_WORKFLOW"},sid,new_cookie)
+            if method=="GET":
+                with db_connect() as db:
+                    result=list_workspace_revisions(db,sid,path,node_id) if history else get_workspace(db,sid,path,node_id)
+                return self._json(200,{"workflow":path,"node_id":node_id,
+                    **({"revisions":result} if history else {"workspace":result})},sid,new_cookie)
+            with db_connect() as db:
+                saved,conflict=update_workspace(db,sid,path,node_id,
+                    req.get("expected_revision"),req.get("input_json"),req.get("execution_draft"))
+            if conflict is not None:
+                return self._json(409,{"error":"NODE_WORKSPACE_REVISION_CONFLICT",
+                                       "current_revision":conflict},sid,new_cookie)
+            return self._json(200,{"workflow":path,"node_id":node_id,"workspace":saved},sid,new_cookie)
+        except (ValueError,TypeError,json.JSONDecodeError) as error:
+            return self._json(400,{"error":str(error)},sid,new_cookie)
+
     def _node01_run(self):
         sid, new_cookie = self._sid()
         if self.headers.get("Origin"):
@@ -323,7 +371,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
         if path == "/api/studio/health":
-            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "mode": "isolated-demo"})
+            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "mode": "isolated-demo"})
+        if path == "/api/studio/nodes/workspace":
+            return self._node_workspace("GET")
+        if path == "/api/studio/nodes/workspace/revisions":
+            return self._node_workspace("GET",history=True)
         if path == "/api/studio/node01/executions":
             return self._node01_history()
         if path.startswith("/api/studio/workflows/"):
@@ -355,6 +407,8 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 return self._json(403, {"error": "출처 오류"})
         path = urlsplit(self.path).path
+        if path == "/api/studio/nodes/workspace":
+            return self._node_workspace("PUT")
         if path.startswith("/api/studio/workflows/"):
             return self._workflow_request("PUT", path)
         return self._json(404, {"error": "지원하지 않는 요청"})
