@@ -14,6 +14,13 @@ const loading=ref(false),saving=ref(false),revision=ref(0),error=ref('');
 const inputText=ref('{}'),draft=ref({kind:'none'}),revisions=ref([]),oldVersion=ref('');
 const status=ref(''),loadedKey=ref('');
 const stringify=x=>JSON.stringify(x,null,2);
+const effectiveInput=computed(()=>{
+  if(!props.upstreamInput)return null;
+  try{
+    const overrides=JSON.parse(inputText.value);
+    return {...props.upstreamInput,...(overrides&&typeof overrides==='object'&&!Array.isArray(overrides)?overrides:{})};
+  }catch{return {input_error:'INVALID_JSON'};}
+});
 const recordKey=computed(()=>props.workflow+':'+props.nodeId);
 const outputs=computed(()=>props.runHistory.filter(x=>x.status==='SUCCESS'&&x.output_json));
 const changeSummary=computed(()=>{
@@ -100,7 +107,7 @@ function restoreVersion(){
               <p>출발 실행 ID: {{upstreamRunId}} · 아래의 INPUT 수정값은 실행 시 이 결과 위에 적용됩니다.</p>
               <pre data-testid="workspace-upstream-output">{{stringify(upstreamInput)}}</pre>
               <label>현재 적용될 INPUT JSON 미리보기</label>
-              <pre data-testid="workspace-effective-input">{{stringify({...upstreamInput,...(function(){try{return JSON.parse(inputText)}catch{return {input_error:'INVALID_JSON'}}})()})}}</pre>
+              <pre data-testid="workspace-effective-input">{{stringify(effectiveInput)}}</pre>
             </div>
             <textarea data-testid="workspace-input" v-model="inputText" aria-label="노드 실행 입력 JSON" spellcheck="false" rows="9"></textarea>
             <p>수정 후 저장하면 기존 값을 덮지 않고 새 이력으로 남습니다.</p>
