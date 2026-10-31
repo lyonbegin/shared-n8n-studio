@@ -51,17 +51,24 @@ function openSharedWorkspace(id){
   if(canExecuteSharedNode(id))refreshNode01History();
 }
 async function runSharedNodeFromCard(id){
+  // Run stays on the canvas: only the explicit settings/history action opens the dialog.
   if(!canExecuteSharedNode(id)||node01Running.value)return;
-  openSharedWorkspace(id);
+  const workflow=stockFlow.value;
   try{
-    const query=new URLSearchParams({workflow:stockFlow.value,node_id:id});
+    const query=new URLSearchParams({workflow,node_id:id});
     const response=await fetch('/api/studio/nodes/workspace?'+query,{cache:'no-store',credentials:'same-origin'});
     if(!response.ok)throw Error('입력 설정 조회 실패 HTTP '+response.status);
     const data=await response.json();
-    const kind=stockFlow.value.includes('library')?'library':'strategy';
+    if(stockFlow.value!==workflow)return;
+    const kind=workflow.includes('latest-library-one')?'library':'strategy';
     const input=data.workspace?.revision?data.workspace.input_json:{ui_selection:kind,requested_detail_limit:1};
-    await executeNode01(input);
-  }catch(e){announce('노드 실행 실패: '+e.message);}
+    await executeNode01(input,id);
+  }catch(e){
+    if(stockFlow.value===workflow){
+      nodes.value=nodes.value.map(n=>n.id===id?{...n,data:{...n.data,state:'error',stateSource:'python_node01'}}:n);
+      announce('노드 실행 실패: '+e.message);
+    }
+  }
 }
 
 const node01Result=ref(null);
@@ -86,8 +93,8 @@ async function refreshNode01History(){
     if(stockFlow.value===workflow&&selectedNodeId.value===node_id)node01History.value=data.executions||[];
   }catch(e){announce('N01 실행 기록 조회 실패: '+e.message);}
 }
-async function executeNode01(overrideInput=null){
-  if(!node01Eligible.value||node01Running.value)return;
+async function executeNode01(overrideInput=null, targetNodeId=selectedNodeId.value){
+  if(!canExecuteSharedNode(targetNodeId)||node01Running.value)return;
   let input;
   try{
     input=overrideInput===null?JSON.parse(node01InputJson.value):overrideInput;
@@ -95,7 +102,8 @@ async function executeNode01(overrideInput=null){
     if(!input||typeof input!=='object'||Array.isArray(input))throw Error('INPUT은 JSON 객체여야 합니다');
   }catch(e){announce('N01 입력 JSON 오류: '+e.message);return;}
   node01Running.value=true;node01Result.value=null;
-  const workflow=stockFlow.value,node_id=selectedNodeId.value;
+  const workflow=stockFlow.value,node_id=targetNodeId;
+  nodes.value=nodes.value.map(n=>n.id===node_id?{...n,data:{...n.data,state:'running',stateSource:'python_node01'}}:n);
   try{
     const response=await fetch('/api/studio/node01/execute',{
       method:'POST',credentials:'same-origin',
@@ -104,12 +112,17 @@ async function executeNode01(overrideInput=null){
     });
     const result=await response.json();
     if(!response.ok&&response.status!==422)throw Error(result.error||'HTTP '+response.status);
-    if(stockFlow.value!==workflow||selectedNodeId.value!==node_id)return;
-    node01Result.value=result;
+    if(stockFlow.value!==workflow)return;
+    if(selectedNodeId.value===node_id)node01Result.value=result;
     nodes.value=nodes.value.map(n=>n.id===node_id?{...n,data:{...n.data,state:result.status==='SUCCESS'?'success':'error',stateSource:'python_node01'}}:n);
     announce(result.status==='SUCCESS'?'N01 Python 단독 실행 성공 · SQLite 저장 · '+result.run_id:'N01 입력 검증 실패 · SQLite 기록 · '+result.error);
-    await refreshNode01History();
-  }catch(e){announce('N01 Python 실행 요청 오류: '+e.message);}
+    if(selectedNodeId.value===node_id)await refreshNode01History();
+  }catch(e){
+    if(stockFlow.value===workflow){
+      nodes.value=nodes.value.map(n=>n.id===node_id?{...n,data:{...n.data,state:'error',stateSource:'python_node01'}}:n);
+      announce('N01 Python 실행 요청 오류: '+e.message);
+    }
+  }
   finally{node01Running.value=false;}
 }
 
