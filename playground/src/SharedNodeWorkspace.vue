@@ -6,6 +6,7 @@ const props=defineProps({
   defaultInput:{type:Object,default:()=>({})},
   defaultDraft:{type:Object,default:()=>({kind:'none'})},
   canRun:Boolean, running:Boolean, runResult:{type:Object,default:null},
+  upstreamInput:{type:Object,default:null}, upstreamRunId:{type:String,default:null},
   runHistory:{type:Array,default:()=>[]}
 });
 const emit=defineEmits(['close','run']);
@@ -94,6 +95,13 @@ function restoreVersion(){
         <div class="shared-workspace-columns">
           <div class="shared-workspace-section">
             <h4>① INPUT JSON · 직접 수정</h4>
+            <div v-if="upstreamInput" data-testid="workspace-upstream" class="shared-workspace-diff">
+              <label>앞 노드의 실제 전체 OUTPUT · 변경 불가</label>
+              <p>출발 실행 ID: {{upstreamRunId}} · 아래의 INPUT 수정값은 실행 시 이 결과 위에 적용됩니다.</p>
+              <pre data-testid="workspace-upstream-output">{{stringify(upstreamInput)}}</pre>
+              <label>현재 적용될 INPUT JSON 미리보기</label>
+              <pre data-testid="workspace-effective-input">{{stringify({...upstreamInput,...(function(){try{return JSON.parse(inputText)}catch{return {input_error:'INVALID_JSON'}}})()})}}</pre>
+            </div>
             <textarea data-testid="workspace-input" v-model="inputText" aria-label="노드 실행 입력 JSON" spellcheck="false" rows="9"></textarea>
             <p>수정 후 저장하면 기존 값을 덮지 않고 새 이력으로 남습니다.</p>
             <div class="shared-workspace-actions">
