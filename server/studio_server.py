@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shared n8n Studio static UI + isolated SQLite draft service.
 
-Pure stdlib. Only allowlisted WF01 N01 can execute. No full workflows, n8n, trading, or arbitrary code.
+Pure stdlib. Project-registered allowlisted nodes only. No full workflows, trading or arbitrary code.
 Each anonymous browser receives an unguessable HttpOnly cookie: its drafts are
 server-stored, but cannot be accessed across devices without future auth.
 """
@@ -14,7 +14,9 @@ import hashlib
 import inspect
 import time
 from urllib.parse import parse_qs
-from wf01_node_executor import execute_node01
+import project_adapter_runtime as project_adapter
+from node_run_store import (init_node_run_db,store_node_result,resolve_transfer,consume_transfer,
+                            available_transfers,latest_graph_state)
 from node_workspace_store import (init_workspace_db, get_workspace, update_workspace, list_workspace_revisions)
 import mimetypes
 import os
@@ -57,25 +59,7 @@ def init_db():
         )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_node01_recent ON node01_executions(sid, workflow_path, node_id, created_at DESC)")
         init_workspace_db(db)
-
-WF01_N01_BINDING = {
-    "python_module": "wf01_node_executor",
-    "python_function": "execute_node01",
-    "code_version": "wf01-n01-v1",
-    "node_character": "manual_collection_start",
-}
-WF01_ONE_MODES = {
-    "operations/WF01-latest-strategy-one.json": "strategy",
-    "operations/WF01-latest-library-one.json": "library",
-}
-
-def node01_id(kind):
-    return "wf01-" + kind + "-01"
-
-def node01_binding_is_valid(workflow, kind):
-    node = next((n for n in workflow.get("nodes", []) if n.get("id") == node01_id(kind)), None)
-    return bool(node and node.get("type") == "n8n-nodes-base.manualTrigger"
-        and node.get("parameters", {}).get("studioPython") == WF01_N01_BINDING)
+        init_node_run_db(db)
 
 def db_connect():
     db = sqlite3.connect(DB_PATH, timeout=15)
@@ -298,29 +282,32 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(req, dict):
                 raise ValueError("REQUEST_OBJECT_REQUIRED")
             path, node_id, data = req.get("workflow"), req.get("node_id"), req.get("input_json")
-            kind = WF01_ONE_MODES.get(path)
-            if not kind or node_id != node01_id(kind):
+            kind = project_adapter.kind_for(path)
+            binding = project_adapter.binding_for(path,node_id)
+            if not kind or not binding or binding.get("node_character")!="manual_collection_start":
                 return self._json(403, {"error": "ONLY_WF01_N01_IS_EXECUTABLE"}, sid, new_cookie)
             file = fixture_path(path)
             with db_connect() as db:
                 row = db.execute("SELECT payload FROM snapshots WHERE sid=? AND path=?", (sid, path)).fetchone()
             workflow = json.loads(row["payload"]) if row else json.loads(file.read_text())
-            if not node01_binding_is_valid(workflow, kind):
+            if not project_adapter.check_node(workflow,path,node_id):
                 return self._json(409, {"error": "N01_CODE_BINDING_INVALID_OR_NOT_SAVED"}, sid, new_cookie)
             if not isinstance(data, dict):
                 raise ValueError("INPUT_JSON_OBJECT_REQUIRED")
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             return self._json(400, {"error": str(exc)}, sid, new_cookie)
-        code_sha = hashlib.sha256(inspect.getsource(execute_node01).encode("utf-8")).hexdigest()
+        code_sha = hashlib.sha256(inspect.getsource(
+            getattr(project_adapter.adapter(),binding["python_function"])).encode("utf-8")).hexdigest()
         started = time.perf_counter()
         out, err, state = None, None, "SUCCESS"
         try:
-            out = execute_node01(data, workflow_kind=kind)
+            out = project_adapter.execute_registered(path,node_id,data)
         except (ValueError, TypeError) as exc:
             err, state = str(exc), "FAILED"
         duration_ms = round((time.perf_counter() - started) * 1000, 3)
         run_id, now = secrets.token_hex(16), datetime.now(timezone.utc).isoformat()
         with db_connect() as db:
+            workspace=get_workspace(db,sid,path,node_id)
             db.execute("""INSERT INTO node01_executions (
                 sid, run_id, workflow_path, node_id, kind, status, input_json, output_json,
                 error, python_module, python_function, code_version, code_sha256,
@@ -328,8 +315,13 @@ class Handler(BaseHTTPRequestHandler):
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (sid, run_id, path, node_id, kind, state,
                  json.dumps(data, ensure_ascii=False), json.dumps(out, ensure_ascii=False) if out else None,
-                 err, WF01_N01_BINDING["python_module"], WF01_N01_BINDING["python_function"],
-                 WF01_N01_BINDING["code_version"], code_sha, duration_ms, now))
+                 err, binding["python_module"], binding["python_function"],
+                 binding["code_version"], code_sha, duration_ms, now))
+            transfers=store_node_result(db,sid=sid,path=path,workflow=workflow,
+                run_id=run_id,workflow_run_id=run_id,node_id=node_id,input_json=data,
+                output_json=out,input_revision=workspace["revision"],
+                code_ref=binding["python_module"]+"."+binding["python_function"],
+                code_sha256=code_sha,error=err,duration_ms=duration_ms,status=state)
             db.execute("""DELETE FROM node01_executions WHERE sid=? AND workflow_path=?
                 AND run_id NOT IN (SELECT run_id FROM node01_executions
                 WHERE sid=? AND workflow_path=? ORDER BY created_at DESC LIMIT 80)""",
@@ -337,12 +329,12 @@ class Handler(BaseHTTPRequestHandler):
         response = {
             "run_id": run_id, "workflow": path, "node_id": node_id,
             "status": state, "input_json": data, "output_json": out, "error": err,
-            "python_module": WF01_N01_BINDING["python_module"],
-            "python_function": WF01_N01_BINDING["python_function"],
-            "code_version": WF01_N01_BINDING["code_version"], "code_sha256": code_sha,
+            "python_module": binding["python_module"],
+            "python_function": binding["python_function"],
+            "code_version": binding["code_version"], "code_sha256": code_sha,
             "duration_ms": duration_ms, "executed_at": now,
             "engine": "python", "tradingview_called": False, "n8n_workflow_started": False,
-            "persistence": "sqlite"
+            "persistence": "sqlite", "prepared_transfers": transfers, "workflow_run_id": run_id
         }
         return self._json(200 if state == "SUCCESS" else 422, response, sid, new_cookie)
 
@@ -350,8 +342,9 @@ class Handler(BaseHTTPRequestHandler):
         sid, new_cookie = self._sid()
         query = parse_qs(urlsplit(self.path).query)
         path, node_id = (query.get("workflow") or [None])[0], (query.get("node_id") or [None])[0]
-        kind = WF01_ONE_MODES.get(path)
-        if not kind or node_id != node01_id(kind):
+        kind = project_adapter.kind_for(path)
+        binding = project_adapter.binding_for(path,node_id)
+        if not kind or not binding or binding.get("node_character")!="manual_collection_start":
             return self._json(403, {"error": "ONLY_WF01_N01_IS_EXECUTABLE"}, sid, new_cookie)
         with db_connect() as db:
             records = db.execute("""SELECT run_id, status, input_json, output_json, error,
@@ -366,16 +359,118 @@ class Handler(BaseHTTPRequestHandler):
             rows.append(item)
         return self._json(200, {"node_id": node_id, "workflow": path, "executions": rows}, sid, new_cookie)
 
+    def _node_graph_api(self, mode):
+        sid,new_cookie=self._sid()
+        query=parse_qs(urlsplit(self.path).query)
+        path=(query.get("workflow") or [None])[0]
+        node_id=(query.get("node_id") or [None])[0]
+        try:
+            fixture_path(path)
+            with db_connect() as db:
+                if mode=="state":
+                    data=latest_graph_state(db,sid,path)
+                elif mode=="transfers":
+                    workflow=json.loads(fixture_path(path).read_text())
+                    if not any(n.get("id")==node_id for n in workflow["nodes"]):
+                        return self._json(404,{"error":"NODE_NOT_IN_WORKFLOW"},sid,new_cookie)
+                    data={"transfers":available_transfers(db,sid,path,node_id)}
+                else:
+                    raise ValueError("INVALID_NODE_GRAPH_MODE")
+            return self._json(200,{"workflow":path,**data},sid,new_cookie)
+        except (ValueError,TypeError) as exc:
+            return self._json(400,{"error":str(exc)},sid,new_cookie)
+
+    def _registered_node_run(self):
+        sid,new_cookie=self._sid()
+        if self.headers.get("X-Studio-Node-Run")!="APPROVED":
+            return self._json(403,{"error":"EXPLICIT_APPROVED_ACTION_REQUIRED"},sid,new_cookie)
+        if not self.headers.get("Content-Type","").startswith("application/json"):
+            return self._json(415,{"error":"JSON_CONTENT_TYPE_REQUIRED"},sid,new_cookie)
+        if self.headers.get("Origin"):
+            origin=urlsplit(self.headers["Origin"])
+            if origin.netloc!=self.headers.get("Host") or origin.scheme not in ("http","https"):
+                return self._json(403,{"error":"CROSS_ORIGIN_FORBIDDEN"},sid,new_cookie)
+        try:
+            size=int(self.headers.get("Content-Length","0"))
+            if not 2<=size<=2048:raise ValueError("REQUEST_SIZE_INVALID")
+            req=json.loads(self.rfile.read(size))
+            path,node_id,source_run_id=req.get("workflow"),req.get("node_id"),req.get("source_run_id")
+            file=fixture_path(path)
+            with db_connect() as db:
+                stored=db.execute("SELECT payload FROM snapshots WHERE sid=? AND path=?",(sid,path)).fetchone()
+                workflow=json.loads(stored["payload"]) if stored else json.loads(file.read_text())
+            binding=project_adapter.check_node(workflow,path,node_id)
+            if not binding or binding.get("node_character")=="manual_collection_start":
+                return self._json(403,{"error":"PROJECT_NODE_NOT_APPROVED"},sid,new_cookie)
+            with db_connect() as db:
+                transfer=resolve_transfer(db,sid=sid,path=path,workflow=workflow,
+                    target_node_id=node_id,source_run_id=source_run_id)
+                workspace=get_workspace(db,sid,path,node_id)
+            incoming=transfer["output_json"]
+            override=workspace["input_json"] if workspace["revision"] else {}
+            if not isinstance(incoming,dict) or not isinstance(override,dict):
+                raise ValueError("NODE_INPUT_OBJECT_REQUIRED")
+            # Never mutate provenance: original upstream JSON is persisted unchanged
+            # in edge_transfers. The merged effective_input becomes the run input.
+            effective_input={**incoming,**override}
+            module=project_adapter.adapter()
+            code_sha=hashlib.sha256(inspect.getsource(
+                getattr(module,binding["python_function"])).encode("utf-8")).hexdigest()
+        except (ValueError,KeyError,TypeError,AttributeError) as exc:
+            return self._json(400,{"error":str(exc)},sid,new_cookie)
+        start=time.perf_counter()
+        state,error,output="SUCCESS",None,None
+        try:
+            output=project_adapter.execute_registered(path,node_id,effective_input)
+        except (ValueError,TypeError) as exc:
+            state,error="FAILED",str(exc)
+        duration=round((time.perf_counter()-start)*1000,3)
+        run_id,now=secrets.token_hex(16),datetime.now(timezone.utc).isoformat()
+        with db_connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            # Check the selected transfer has not been consumed by another run.
+            if state=="SUCCESS":
+                ready=db.execute("SELECT status FROM edge_transfers WHERE transfer_id=? AND sid=?",
+                  (transfer["transfer_id"],sid)).fetchone()
+                if not ready or ready["status"]!="READY":
+                    db.rollback()
+                    return self._json(409,{"error":"TRANSFER_ALREADY_CONSUMED"},sid,new_cookie)
+            targets=store_node_result(db,sid=sid,path=path,workflow=workflow,
+                run_id=run_id,workflow_run_id=transfer["workflow_run_id"],
+                node_id=node_id,input_json=effective_input,output_json=output,
+                upstream_run_id=source_run_id,input_revision=workspace["revision"],
+                code_ref=binding["python_module"]+"."+binding["python_function"],
+                code_sha256=code_sha,error=error,duration_ms=duration,status=state)
+            if state=="SUCCESS":
+                consume_transfer(db,transfer["transfer_id"],run_id)
+            db.commit()
+        return self._json(200 if state=="SUCCESS" else 422,{
+            "run_id":run_id,"workflow_run_id":transfer["workflow_run_id"],
+            "workflow":path,"node_id":node_id,"status":state,
+            "input_json":effective_input,"upstream_output_json":incoming,
+            "upstream_run_id":source_run_id,"input_revision":workspace["revision"],
+            "output_json":output,"error":error,"duration_ms":duration,
+            "python_module":binding["python_module"],
+            "python_function":binding["python_function"],
+            "code_version":binding["code_version"],"code_sha256":code_sha,
+            "prepared_transfers":targets,"executed_at":now,
+            "persistence":"sqlite","tradingview_called":False,
+            "next_node_executed":False},sid,new_cookie)
+
     def do_GET(self):
         path = urlsplit(self.path).path
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
         if path == "/api/studio/health":
-            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-node-workspace-v3-inline-run", "mode": "isolated-demo"})
+            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-node-edges-v1", "nodeEdgeTransferEnabled": True, "projectAdapterConnected": project_adapter.adapter() is not None, "mode": "isolated-demo"})
         if path == "/api/studio/nodes/workspace":
             return self._node_workspace("GET")
         if path == "/api/studio/nodes/workspace/revisions":
             return self._node_workspace("GET",history=True)
+        if path == "/api/studio/nodes/graph-state":
+            return self._node_graph_api("state")
+        if path == "/api/studio/nodes/transfers":
+            return self._node_graph_api("transfers")
         if path == "/api/studio/node01/executions":
             return self._node01_history()
         if path.startswith("/api/studio/workflows/"):
@@ -414,6 +509,8 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(404, {"error": "지원하지 않는 요청"})
 
     def do_POST(self):
+        if urlsplit(self.path).path == "/api/studio/nodes/execute":
+            return self._registered_node_run()
         if urlsplit(self.path).path == "/api/studio/node01/execute":
             return self._node01_run()
         return self._json(405, {"error": "워크플로 실행 비활성화 · WF01 N01 단독 실행만 지원"})
