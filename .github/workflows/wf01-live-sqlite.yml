@@ -7,6 +7,7 @@ on:
       - 'playground/tests/wf01-detailed-editor.spec.js'
       - 'playground/tests/wf02-live-sqlite.spec.js'
       - 'playground/tests/wf01-one-per-mode.spec.js'
+      - 'playground/tests/wf01-node01-python.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
   push:
@@ -16,6 +17,7 @@ on:
       - 'playground/tests/wf01-detailed-editor.spec.js'
       - 'playground/tests/wf02-live-sqlite.spec.js'
       - 'playground/tests/wf01-one-per-mode.spec.js'
+      - 'playground/tests/wf01-node01-python.spec.js'
       - 'playground/playwright.wf01.live.config.js'
       - '.github/workflows/wf01-live-sqlite.yml'
 jobs:
@@ -54,6 +56,33 @@ jobs:
               if [ "$attempt" -eq 45 ]; then echo "${kind} not deployed"; exit 1; fi
               sleep 8
             done
+          done
+      - name: N01 Python source compile and real handler contract
+        run: |
+          python3 -m py_compile ../server/studio_server.py ../server/wf01_node_executor.py
+          PYTHONPATH=../server python3 - <<'PY'
+          from wf01_node_executor import execute_node01
+          for kind in ('strategy','library'):
+              out = execute_node01({'ui_selection':kind,'requested_detail_limit':1},workflow_kind=kind)
+              assert out['kind'] == kind and out['max_detail_success'] == 1
+              assert out['tradingview_requested'] is False
+              for data in ({'ui_selection':kind,'requested_detail_limit':2},
+                           {'ui_selection':kind,'requested_detail_limit':True}):
+                  try:
+                      execute_node01(data,workflow_kind=kind)
+                      raise AssertionError('bad input accepted')
+                  except ValueError:
+                      pass
+          PY
+      - name: Wait for Railway N01 Python execution deployment
+        run: |
+          for attempt in $(seq 1 50); do
+            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("node01ExecutionEnabled") is True'; then
+              echo 'N01 backend Python executor is live'
+              break
+            fi
+            if [ "$attempt" -eq 50 ]; then echo 'N01 Python runtime not deployed'; exit 1; fi
+            sleep 8
           done
       - name: Actual production VueFlow and per-browser SQLite persistence
         run: npx playwright test --config=playwright.wf01.live.config.js
