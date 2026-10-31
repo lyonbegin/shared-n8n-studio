@@ -12,7 +12,7 @@ for(const kind of ['strategy','library']){
     await page.locator('[data-node-id="'+nodeId+'"]').click();
     const panel=page.getByTestId('wf01-node01-python');
     await expect(panel).toBeVisible();
-    await expect(page.getByTestId('node01-python-binding')).toContainText('wf01_node_executor.execute_node01');
+    await expect(page.getByTestId('node01-python-binding')).toContainText('investment_node_adapter.execute_node01');
     const input={ui_selection:kind,requested_detail_limit:1};
     await page.getByTestId('node01-input').fill(JSON.stringify(input,null,2));
     await page.getByTestId('execute-node01').click();
