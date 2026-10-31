@@ -10,6 +10,10 @@ on:
       - 'playground/tests/wf01-node01-python.spec.js'
       - 'playground/tests/shared-node-workspace-live.spec.js'
       - 'playground/tests/shared-node-inline-execute.spec.js'
+      - 'playground/tests/shared-node-edge-transfer-live.spec.js'
+      - 'server/node_run_store.py'
+      - 'server/project_adapter_runtime.py'
+      - 'server/test_node_run_store.py'
       - 'playground/src/SharedNodeWorkspace.vue'
       - 'playground/src/App.vue'
       - 'playground/src/style.css'
@@ -28,6 +32,10 @@ on:
       - 'playground/tests/wf01-node01-python.spec.js'
       - 'playground/tests/shared-node-workspace-live.spec.js'
       - 'playground/tests/shared-node-inline-execute.spec.js'
+      - 'playground/tests/shared-node-edge-transfer-live.spec.js'
+      - 'server/node_run_store.py'
+      - 'server/project_adapter_runtime.py'
+      - 'server/test_node_run_store.py'
       - 'playground/src/SharedNodeWorkspace.vue'
       - 'playground/src/App.vue'
       - 'playground/src/style.css'
@@ -73,28 +81,14 @@ jobs:
               sleep 8
             done
           done
-      - name: N01 Python source compile and real handler contract
+      - name: Generic node-run store and shared server Python tests
         run: |
-          python3 -m py_compile ../server/studio_server.py ../server/wf01_node_executor.py ../server/node_workspace_store.py
-          python3 -m unittest discover -s ../server -p 'test_studio_server.py'
-          PYTHONPATH=../server python3 - <<'PY'
-          from wf01_node_executor import execute_node01
-          for kind in ('strategy','library'):
-              out = execute_node01({'ui_selection':kind,'requested_detail_limit':1},workflow_kind=kind)
-              assert out['kind'] == kind and out['max_detail_success'] == 1
-              assert out['tradingview_requested'] is False
-              for data in ({'ui_selection':kind,'requested_detail_limit':2},
-                           {'ui_selection':kind,'requested_detail_limit':True}):
-                  try:
-                      execute_node01(data,workflow_kind=kind)
-                      raise AssertionError('bad input accepted')
-                  except ValueError:
-                      pass
-          PY
+          python3 -m py_compile ../server/studio_server.py ../server/node_workspace_store.py ../server/node_run_store.py ../server/project_adapter_runtime.py
+          PYTHONPATH=../server python3 -m unittest discover -s ../server -p 'test_*.py'
       - name: Wait for Railway N01 Python execution deployment
         run: |
           for attempt in $(seq 1 50); do
-            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("nodeUiControlsRelease") == "shared-node-workspace-v3-inline-run"'; then
+            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("nodeUiControlsRelease") == "shared-node-edges-v1"'; then
               echo 'N01 backend Python executor is live'
               break
             fi
