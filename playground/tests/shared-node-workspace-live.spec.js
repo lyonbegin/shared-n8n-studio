@@ -8,10 +8,16 @@ test('common node top actions: manual INPUT revision, real rerun, changed OUTPUT
   const card=page.locator('[data-node-id="wf01-strategy-01"]');
   await card.hover();
   await page.getByTestId('node-run-wf01-strategy-01').click();
+  // ▶ 실행 must NEVER open the modal or cover the canvas.
+  await expect(page.getByTestId('shared-node-workspace')).toHaveCount(0);
+  await expect(card.locator('.node-footer')).toContainText('Python 실행 성공');
+  await expect(card).toHaveClass(/is-success/);
+  await expect(page.getByTestId('shared-node-workspace')).toHaveCount(0);
+  // ⚙ 설정·이력 is the sole explicit modal-opening action.
+  await page.getByTestId('node-open-wf01-strategy-01').click();
   await expect(page.getByTestId('shared-node-workspace')).toBeVisible();
   await expect(page.getByTestId('workspace-run-output')).toContainText('"max_pages": 3');
   await expect(page.getByTestId('workspace-run-status')).toContainText('SUCCESS');
-  await expect(card.locator('.node-footer')).toContainText('Python 실행 성공');
   const current={ui_selection:'strategy',requested_detail_limit:1,max_pages:1};
   await page.getByTestId('workspace-input').fill(JSON.stringify(current,null,2));
   await page.getByTestId('workspace-save-run').click();
