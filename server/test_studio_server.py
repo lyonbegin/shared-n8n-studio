@@ -128,6 +128,54 @@ class ServerTest(unittest.TestCase):
         _,value=self.call(ENDPOINT,opener=browser)
         self.assertFalse(value["workflow"]["active"])
 
+    def test_common_node_workspace_revision_restore_history_and_isolation(self):
+        cookies=http.cookiejar.CookieJar()
+        browser=build_opener(HTTPCookieProcessor(cookies))
+        workspace="api/studio/nodes/workspace"
+        url=workspace+"?workflow=operations/F01.json&node_id=a"
+        _,initial=self.call(url,opener=browser)
+        self.assertEqual(initial["workspace"]["revision"],0)
+        first={"workflow":"operations/F01.json","node_id":"a","expected_revision":0,
+            "input_json":{"page":1,"keyword":"hello"},
+            "execution_draft":{"kind":"python","python_module":"adapter","python_function":"run",
+                               "python_code":"result = 1","notes":"original"}}
+        code,result=self.call(workspace,"PUT",first,browser)
+        self.assertEqual(code,200)
+        self.assertEqual(result["workspace"]["revision"],1)
+        self.assertFalse(result["workspace"]["code_execution_approved"])
+        edited={**first,"expected_revision":1,"input_json":{"page":2,"keyword":"changed"},
+                "execution_draft":{"kind":"http","http_method":"GET",
+                                   "api_url":"https://api.example.test/v2","notes":"updated endpoint"}}
+        code,new=self.call(workspace,"PUT",edited,browser)
+        self.assertEqual(code,200)
+        self.assertEqual(new["workspace"]["revision"],2)
+        _,rows=self.call(workspace+"/revisions?workflow=operations/F01.json&node_id=a",opener=browser)
+        self.assertEqual([r["revision"] for r in rows["revisions"]],[2,1])
+        self.assertEqual(rows["revisions"][1]["input_json"]["page"],1)
+        self.assertEqual(rows["revisions"][0]["execution_draft"]["api_url"],"https://api.example.test/v2")
+        code,conflict=self.call(workspace,"PUT",edited|{"expected_revision":1},browser)
+        self.assertEqual(code,409)
+        self.assertEqual(conflict["current_revision"],2)
+        # Restore old values as a new v3, rather than deleting audit history.
+        old=rows["revisions"][1]
+        code,restored=self.call(workspace,"PUT",{
+            "workflow":"operations/F01.json","node_id":"a","expected_revision":2,
+            "input_json":old["input_json"],"execution_draft":old["execution_draft"]},browser)
+        self.assertEqual(code,200)
+        self.assertEqual(restored["workspace"]["revision"],3)
+        self.assertEqual(restored["workspace"]["input_json"]["page"],1)
+        # Browser isolation and allowlist of nodes in stored original.
+        _,fresh=self.call(url,opener=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar())))
+        self.assertEqual(fresh["workspace"]["revision"],0)
+        code,_=self.call(workspace+"?workflow=operations/F01.json&node_id=unknown",opener=browser)
+        self.assertEqual(code,404)
+        code,invalid=self.call(workspace,"PUT",first|{"expected_revision":3,
+            "execution_draft":{"kind":"http","api_url":"file:///etc/passwd"}},browser)
+        self.assertEqual(code,400)
+        # Saved code draft never grants execution rights.
+        code,_=self.call("api/studio/run","POST",{"run":"arbitrary"},browser)
+        self.assertEqual(code,405)
+
     def test_disabled_execution_no_path_traversal_no_unsupported_api(self):
         s,_=self.call("api/studio/run",method="POST",data={"anything":"true"})
         self.assertEqual(s,405)
