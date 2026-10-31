@@ -359,6 +359,34 @@ class Handler(BaseHTTPRequestHandler):
             rows.append(item)
         return self._json(200, {"node_id": node_id, "workflow": path, "executions": rows}, sid, new_cookie)
 
+    def _node_history_api(self):
+        sid,new_cookie=self._sid()
+        q=parse_qs(urlsplit(self.path).query)
+        path=(q.get("workflow") or [None])[0]
+        node_id=(q.get("node_id") or [None])[0]
+        try:
+            file=fixture_path(path)
+            with db_connect() as db:
+                stored=db.execute("SELECT payload FROM snapshots WHERE sid=? AND path=?",(sid,path)).fetchone()
+                workflow=json.loads(stored["payload"]) if stored else json.loads(file.read_text())
+                if not any(n.get("id")==node_id for n in workflow["nodes"]):
+                    return self._json(404,{"error":"NODE_NOT_IN_WORKFLOW"},sid,new_cookie)
+                rows=db.execute("""SELECT run_id,workflow_run_id,node_id,status,input_json,
+                    output_json,upstream_run_id,input_revision,code_ref,code_sha256,
+                    error,duration_ms,created_at FROM node_runs WHERE
+                    sid=? AND workflow_path=? AND node_id=?
+                    ORDER BY created_at DESC LIMIT 20""",(sid,path,node_id)).fetchall()
+                result=[]
+                for r in rows:
+                    data=dict(r)
+                    data["input_json"]=json.loads(data["input_json"])
+                    data["output_json"]=json.loads(data["output_json"]) if data["output_json"] else None
+                    data["code_version"]=data["code_ref"]
+                    result.append(data)
+            return self._json(200,{"node_id":node_id,"workflow":path,"executions":result},sid,new_cookie)
+        except (ValueError,TypeError) as exc:
+            return self._json(400,{"error":str(exc)},sid,new_cookie)
+
     def _node_graph_api(self, mode):
         sid,new_cookie=self._sid()
         query=parse_qs(urlsplit(self.path).query)
@@ -467,6 +495,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._node_workspace("GET")
         if path == "/api/studio/nodes/workspace/revisions":
             return self._node_workspace("GET",history=True)
+        if path == "/api/studio/nodes/history":
+            return self._node_history_api()
         if path == "/api/studio/nodes/graph-state":
             return self._node_graph_api("state")
         if path == "/api/studio/nodes/transfers":
