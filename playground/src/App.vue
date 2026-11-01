@@ -8,6 +8,7 @@ import {NODE_CATALOG,NODE_GROUPS,NODE_BY_KIND,defaultParameters,visibleFields,va
 import {STOCK_WORKFLOWS,fromN8nWorkflow,toN8nWorkflow} from './investment-adapter.js';
 import {readN8nExecutionFile} from './n8n-execution-inspector.js';
 import SharedNodeWorkspace from './SharedNodeWorkspace.vue';
+import WorkflowRunPanel from './WorkflowRunPanel.vue';
 
 const STOCK_MODE=import.meta.env.VITE_EDITOR_PROJECT==='investment';
 const STORAGE_KEY='shared-n8n-studio:playground:v1';
@@ -20,6 +21,122 @@ const stockServerState=ref('');
 const stockServerAvailable=ref(false);
 const stockVersionRows=ref([]);
 const importedExecution=ref(null);
+const workflowRunPanelOpen=ref(false);
+const workflowRunLoading=ref(false);
+const workflowRunResult=ref(null);
+const workflowRunTrace=ref(null);
+const workflowRunError=ref('');
+const workflowRunConfig=computed(()=>stockMode?stockOriginal.value?.meta?.studioWorkflowRun||null:null);
+const workflowRunKey=file=>'shared-n8n-studio:workflow-run:'+file;
+function permittedWorkflowService(config){
+  try{
+    const endpoint=new URL(config?.endpoint),base=new URL(config?.result_origin);
+    return endpoint.protocol==='https:'&&base.protocol==='https:'&&endpoint.origin===base.origin
+      &&config.transport==='external_json'&&Array.isArray(config.fields)
+      &&typeof config.final_node_id==='string'&&endpoint.pathname==='/api/compare';
+  }catch{return false;}
+}
+function chartResultUrl(){
+  const config=workflowRunConfig.value,run=workflowRunResult.value;
+  if(!run?.run_id||!/^[0-9a-f]{24}$/.test(run.run_id)||!permittedWorkflowService(config))return null;
+  const uri=new URL(config.result_path||'/',config.result_origin);
+  uri.searchParams.set('run',run.run_id);
+  return uri.href;
+}
+function isFinalResultNode(id){
+  return Boolean(workflowRunConfig.value?.final_node_id===id&&chartResultUrl());
+}
+function openChartResult(id){
+  if(!isFinalResultNode(id))return;
+  const uri=chartResultUrl();
+  window.open(uri,'_blank','noopener,noreferrer');
+}
+function displayWorkflowTrace(result,trace){
+  const cfg=workflowRunConfig.value;
+  if(!cfg)return;
+  const states=new Map();
+  const alternates=new Set();
+  for(const [i,event] of (trace?.events||[]).entries()){
+    let id=cfg.stage_nodes?.[i];
+    if(i===5&&cfg.alternate_condition_node_id&&!result.numeric_match){
+      alternates.add(id);
+      id=cfg.alternate_condition_node_id;
+    }
+    if(!id)continue;
+    states.set(id,event.status==='DONE'?'success':event.status==='PENDING'?'ready':'error');
+  }
+  // The final node is a result-navigation action, not a successful parity verdict.
+  if(result.run_id)states.set(cfg.final_node_id,'ready');
+  nodes.value=nodes.value.map(n=>({...n,data:{
+    ...n.data,state:states.get(n.id)||'idle',
+    stateSource:states.has(n.id)?'project_service':null,
+    runId:result.run_id||null
+  }}));
+  edges.value=edges.value.map(e=>{
+    const target=states.get(e.target),source=states.get(e.source);
+    const completed=source==='success'&&Boolean(target);
+    return {...e,style:{stroke:completed?'#219653':'#98a9be',strokeWidth:completed?3:2},
+      animated:completed&&target==='ready'};
+  });
+}
+async function executeProjectWorkflow(input){
+  const cfg=workflowRunConfig.value,file=stockFlow.value;
+  if(workflowRunLoading.value||!permittedWorkflowService(cfg)){
+    workflowRunError.value='등록된 프로젝트 실행 서비스가 없습니다.';return;
+  }
+  workflowRunError.value='';
+  workflowRunLoading.value=true;
+  workflowRunPanelOpen.value=false;
+  workflowRunResult.value=null;
+  workflowRunTrace.value=null;
+  try{
+    nodes.value=nodes.value.map(n=>({...n,data:{...n.data,state:n.id===cfg.stage_nodes?.[0]?'running':'idle',
+      stateSource:n.id===cfg.stage_nodes?.[0]?'project_service':null}}));
+    const response=await fetch(cfg.endpoint,{method:'POST',mode:'cors',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});
+    const result=await response.json();
+    if(!response.ok)throw Error(result.error||'HTTP '+response.status);
+    if(file!==stockFlow.value)return;
+    if(!result.run_id||!/^[0-9a-f]{24}$/.test(result.run_id))throw Error('실행 ID 없는 응답');
+    const traceUrl=new URL(result.trace_url,cfg.result_origin);
+    if(traceUrl.origin!==new URL(cfg.result_origin).origin)throw Error('허용되지 않은 실행 기록 주소');
+    const traced=await fetch(traceUrl,{mode:'cors',cache:'no-store'});
+    if(!traced.ok)throw Error('단계별 실행 기록 조회 실패: '+traced.status);
+    const trace=await traced.json();
+    workflowRunResult.value=result;
+    workflowRunTrace.value=trace;
+    localStorage.setItem(workflowRunKey(file),result.run_id);
+    displayWorkflowTrace(result,trace);
+    announce('검증 서비스 실행 결과 저장 · '+result.status+' · 마지막 노드의 차트 비교 결과 보기에서 상세 확인');
+  }catch(err){
+    if(file===stockFlow.value){
+      workflowRunError.value=err.message;
+      nodes.value=nodes.value.map(n=>({...n,data:{...n.data,state:n.id===cfg.stage_nodes?.[0]?'error':'idle',stateSource:'project_service'}}));
+      announce('프로젝트 검증 흐름 실행 실패: '+err.message);
+    }
+  }finally{workflowRunLoading.value=false;}
+}
+async function restoreProjectWorkflowRun(file){
+  const cfg=workflowRunConfig.value;
+  if(!permittedWorkflowService(cfg))return;
+  const id=localStorage.getItem(workflowRunKey(file));
+  if(!id||!/^[0-9a-f]{24}$/.test(id))return;
+  try{
+    const root=new URL(cfg.result_origin);
+    const [response,traceResponse]=await Promise.all([
+      fetch(new URL('/api/runs/'+id,root),{cache:'no-store'}),
+      fetch(new URL('/api/runs/'+id+'/trace',root),{cache:'no-store'})
+    ]);
+    if(!response.ok||!traceResponse.ok)return;
+    const detail=await response.json(),trace=await traceResponse.json();
+    if(file!==stockFlow.value||detail.run_id!==id)return;
+    const result={...detail,run_id:id,numeric_match:detail.numeric_match===true};
+    workflowRunResult.value=result;
+    workflowRunTrace.value=trace;
+    displayWorkflowTrace(result,trace);
+  }catch{/* No automatic success is shown if the persisted run cannot be verified. */}
+}
+
 const node01InputJson=ref('{}');
 const sharedWorkspaceOpen=ref(false);
 const upstreamForWorkspace=ref(null);
@@ -289,7 +406,13 @@ const NodeCard=defineComponent({
           h('button',{class:'shared-node-action nodrag',title:canExecuteSharedNode(props.id)?'저장된 입력으로 실제 Python 노드 실행':'실행 어댑터 미연결',
              disabled:!canExecuteSharedNode(props.id)||node01Running.value,
              'aria-label':'노드 실행 '+props.id,'data-testid':'node-run-'+props.id,
-             onPointerdown:e=>e.stopPropagation(),onClick:e=>{e.stopPropagation();runSharedNodeFromCard(props.id);}},'▶ 실행')
+             onPointerdown:e=>e.stopPropagation(),onClick:e=>{e.stopPropagation();runSharedNodeFromCard(props.id);}},'▶ 실행'),
+          ...(isFinalResultNode(props.id)?[h('button',{class:'shared-node-action nodrag',
+              'data-testid':'node-result-'+props.id,
+              'aria-label':'차트 비교 결과 보기',
+              title:'별도 페이지에서 TradingView 원본과 Python 렌더링 결과를 비교합니다',
+              onPointerdown:e=>e.stopPropagation(),
+              onClick:e=>{e.stopPropagation();openChartResult(props.id);}},'↗ 차트 결과 보기')]:[])
         ]),
         h('div',{class:'node-header'},[
           h('span',{class:'node-icon'},meta.icon),
@@ -301,7 +424,7 @@ const NodeCard=defineComponent({
         ]),
         h('div',{class:'node-footer'},[
           h('span',{class:['node-status-dot',props.data.state||'idle']}),
-          h('span',props.data.stateSource==='execution_file'?(props.data.state==='error'?'실행 기록: 오류':props.data.state==='success'?'실행 기록: 성공':props.data.state==='running'?'실행 기록: 실행 중':'기록 없음'):props.data.state==='running'?'실행 중':props.data.state==='ready'?'입력 준비':props.data.state==='success'?(['python_node01','node_run'].includes(props.data.stateSource)?'Python 실행 성공':'모의 성공'):props.data.state==='error'?'실행 실패':'준비됨'),
+          h('span',props.data.stateSource==='execution_file'?(props.data.state==='error'?'실행 기록: 오류':props.data.state==='success'?'실행 기록: 성공':props.data.state==='running'?'실행 기록: 실행 중':'기록 없음'):props.data.state==='running'?'실행 중':props.data.state==='ready'?(props.data.stateSource==='project_service'?'비교 결과 확인 가능':'입력 준비'):props.data.state==='success'?(['python_node01','node_run'].includes(props.data.stateSource)?'Python 실행 성공':props.data.stateSource==='project_service'?'검증 단계 완료':'모의 성공'):props.data.state==='error'?'실행 실패':'준비됨'),
           h('span',{class:'node-id'},props.id.replace(/^demo_.+?_/, '#'))
         ]),
         ...((meta.outputs||['main']).map((port,i)=>h(Handle,{type:'source',position:Position.Right,id:port,class:'port port-out',title:'출력: '+port,style:{top:((i+1)/(meta.outputs.length+1)*100)+'%'}})))
@@ -513,6 +636,8 @@ async function importN8nExecution(event){
 async function openStockFlow(file){
  if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
  stockFlow.value=file;
+ workflowRunPanelOpen.value=false;workflowRunResult.value=null;
+ workflowRunTrace.value=null;workflowRunError.value='';
  connectionStartId.value=null;
  clearImportedExecution(true);
  // Persist route synchronously, not only after network fetch, to avoid
@@ -765,12 +890,14 @@ watch(()=>selectedNodeId.value,()=>{
             <button class="toolbar-btn" @click="loadLocal" title="브라우저 저장값 불러오기">↺</button>
             <button v-if="stockMode" class="toolbar-btn" title="공식 n8n 실행 결과 JSON 가져오기" @click="runFileInput?.click()">↳ <span>실행 결과</span></button>
              <input v-if="stockMode" ref="runFileInput" type="file" accept=".json,application/json" class="visually-hidden" aria-label="n8n 실행 JSON 파일" @change="importN8nExecution"/>
+             <button v-if="workflowRunConfig" class="primary-btn" data-testid="workflow-open-run"
+                :disabled="workflowRunLoading" @click="workflowRunPanelOpen=true">▶ <span>{{workflowRunLoading?'검증 실행 중':'전체 검증 흐름 실행'}}</span></button>
              <button class="primary-btn" @click="saveLocal">▣ <span>{{stockMode?'서버 저장':'브라우저 저장'}}</span></button>
           </div>
         </div>
         <div class="canvas-info">
           <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?('Investment · '+stockWorkflows.length+'개 저장 가능한 워크플로'):'Editor playground'}}</b></div>
-          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?('DB '+(stockServerAvailable?'연결됨 · v'+stockServerVersion:'미연결')+' · 전체 실행 비활성 · N01 단독 가능'):'모의 데이터 전용'}}</span></div>
+          <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?(workflowRunConfig?'프로젝트 Python 검증 단계 실행 · 완료 후 마지막 노드에서 차트 보기':('DB '+(stockServerAvailable?'연결됨 · v'+stockServerVersion:'미연결')+' · 노드별 승인된 실행만 허용')):'모의 데이터 전용'}}</span></div>
         </div>
         <div class="canvas-holder" data-testid="canvas-holder" @dragover="onDragOver" @drop="onDrop">
           <VueFlow id="shared-studio-playground" v-model:nodes="nodes" v-model:edges="edges" :node-types="nodeTypes" :fit-view-on-init="true"
@@ -878,6 +1005,12 @@ watch(()=>selectedNodeId.value,()=>{
                 </template>
               </template>
             </div>
+            <div v-if="isFinalResultNode(selectedNode.id)" data-testid="final-verification-action" style="margin:14px 0;padding:12px;border:1px solid #a6c9e8;border-radius:9px;">
+              <b>최종 검증 결과</b>
+              <p style="font-size:12px;">검증 결과: {{workflowRunResult?.status}} · 실행 ID {{workflowRunResult?.run_id}}</p>
+              <p style="font-size:11px;">최종 PASS가 아니라 별도 차트 비교 화면에서 TradingView 원본과 Python 렌더링 결과를 확인할 수 있는 상태입니다.</p>
+              <button class="primary-btn" data-testid="final-chart-result" style="width:100%;" @click="openChartResult(selectedNode.id)">↗ 차트 비교 결과 보기</button>
+            </div>
             <button class="danger-outline" @click="deleteSelected">⌫ 선택 노드 삭제</button>
           </template>
           <template v-else-if="selectedEdge">
@@ -925,6 +1058,9 @@ watch(()=>selectedNodeId.value,()=>{
         </div>
       </aside>
     </div>
+    <WorkflowRunPanel v-if="workflowRunConfig" :open="workflowRunPanelOpen"
+       :config="workflowRunConfig" :running="workflowRunLoading" :workflow-name="workflowName"
+       @close="workflowRunPanelOpen=false" @execute="executeProjectWorkflow" />
     <SharedNodeWorkspace v-if="stockMode&&sharedWorkspaceNode" :open="sharedWorkspaceOpen"
        :workflow="stockFlow" :node-id="sharedWorkspaceNodeId"
        :node-name="sharedWorkspaceNode.data.label" :default-input="sharedWorkspaceDefaultInput"
