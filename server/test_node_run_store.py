@@ -75,4 +75,33 @@ class TestEdgeTransfer(unittest.TestCase):
                 workflow=FLOW,target_node_id="b",source_run_id="ok1")
         db.close()
 
+    def test_if_only_selected_output_is_transferred(self):
+        graph={"nodes":[{"id":"if","name":"Decision"},
+                        {"id":"yes","name":"If True"},{"id":"no","name":"If False"}],
+          "connections":{"Decision":{"main":[
+             [{"node":"If True","index":0}],
+             [{"node":"If False","index":0}]]}}}
+        db=connect()
+        paths=store_node_result(db,sid="sid",path="operations/IF.json",
+          workflow=graph,run_id="if-1",workflow_run_id="flow-1",node_id="if",
+          input_json={"has_candidate":True},
+          output_json={"has_candidate":True,"_studio_active_ports":[0]},
+          active_source_ports=[0])
+        self.assertEqual(len(paths),1)
+        self.assertEqual(paths[0]["source_port"],0)
+        self.assertEqual(paths[0]["target_node_id"],"yes")
+        self.assertEqual(available_transfers(db,"sid","operations/IF.json","no"),[])
+        self.assertEqual(len(available_transfers(db,"sid","operations/IF.json","yes")),1)
+        paths2=store_node_result(db,sid="sid",path="operations/IF.json",
+          workflow=graph,run_id="if-2",workflow_run_id="flow-2",node_id="if",
+          input_json={"has_candidate":False},
+          output_json={"has_candidate":False,"_studio_active_ports":[1]},
+          active_source_ports=[1])
+        self.assertEqual([p["target_node_id"] for p in paths2],["no"])
+        with self.assertRaisesRegex(ValueError,"ACTIVE_SOURCE_PORT_NOT_CONNECTED"):
+            store_node_result(db,sid="sid",path="operations/IF.json",
+               workflow=graph,run_id="bad",workflow_run_id="bad",node_id="if",
+               input_json={},output_json={},active_source_ports=[2])
+        db.close()
+
 if __name__=="__main__":unittest.main()
