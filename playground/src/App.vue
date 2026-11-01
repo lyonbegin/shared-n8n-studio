@@ -690,6 +690,8 @@ async function openStockFlow(file){
    // Otherwise users clicking the just-rendered node lose their inspector
    // when the pending graph-state GET eventually resolves.
    await refreshGraphState(file);
+   // Revalidate persisted run with project service before enabling final result button.
+   await restoreProjectWorkflowRun(file);
    localStorage.setItem('shared-n8n-studio:investment:selected',file);
    announce((serverSource?'서버 저장본':stored?'브라우저 복구본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개 · '+stockServerState.value);
    if(stockServerAvailable.value)await refreshStockVersions(file);
