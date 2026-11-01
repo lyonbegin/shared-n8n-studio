@@ -450,6 +450,9 @@ class Handler(BaseHTTPRequestHandler):
         state,error,output="SUCCESS",None,None
         try:
             output=project_adapter.execute_registered(path,node_id,effective_input)
+            if binding.get("node_character")=="conditional_route":
+                if not isinstance(output,dict) or "_studio_active_ports" not in output:
+                    raise ValueError("CONDITIONAL_ACTIVE_PORTS_REQUIRED")
         except (ValueError,TypeError) as exc:
             state,error="FAILED",str(exc)
         duration=round((time.perf_counter()-start)*1000,3)
@@ -468,7 +471,10 @@ class Handler(BaseHTTPRequestHandler):
                 node_id=node_id,input_json=effective_input,output_json=output,
                 upstream_run_id=source_run_id,input_revision=workspace["revision"],
                 code_ref=binding["python_module"]+"."+binding["python_function"],
-                code_sha256=code_sha,error=error,duration_ms=duration,status=state)
+                code_sha256=code_sha,error=error,duration_ms=duration,status=state,
+                active_source_ports=(output.get("_studio_active_ports")
+                    if state=="SUCCESS" and binding.get("node_character")=="conditional_route"
+                    else None))
             if state=="SUCCESS":
                 consume_transfer(db,transfer["transfer_id"],run_id)
             db.commit()
