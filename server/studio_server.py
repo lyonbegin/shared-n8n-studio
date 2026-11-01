@@ -490,7 +490,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
         if path == "/api/studio/health":
-            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-node-edges-v2-stable-selection", "nodeEdgeTransferEnabled": True, "projectAdapterConnected": project_adapter.adapter() is not None, "mode": "isolated-demo"})
+            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-workflow-final-result-v1", "nodeEdgeTransferEnabled": True, "projectAdapterConnected": project_adapter.adapter() is not None, "mode": "isolated-demo"})
         if path == "/api/studio/nodes/workspace":
             return self._node_workspace("GET")
         if path == "/api/studio/nodes/workspace/revisions":
