@@ -11,6 +11,8 @@ on:
       - 'playground/tests/shared-node-workspace-live.spec.js'
       - 'playground/tests/shared-node-inline-execute.spec.js'
       - 'playground/tests/shared-node-edge-transfer-live.spec.js'
+      - 'playground/tests/wf02-final-result-navigation.spec.js'
+      - 'playground/src/WorkflowRunPanel.vue'
       - 'server/node_run_store.py'
       - 'server/project_adapter_runtime.py'
       - 'server/test_node_run_store.py'
@@ -33,6 +35,8 @@ on:
       - 'playground/tests/shared-node-workspace-live.spec.js'
       - 'playground/tests/shared-node-inline-execute.spec.js'
       - 'playground/tests/shared-node-edge-transfer-live.spec.js'
+      - 'playground/tests/wf02-final-result-navigation.spec.js'
+      - 'playground/src/WorkflowRunPanel.vue'
       - 'server/node_run_store.py'
       - 'server/project_adapter_runtime.py'
       - 'server/test_node_run_store.py'
@@ -88,7 +92,7 @@ jobs:
       - name: Wait for Railway N01 Python execution deployment
         run: |
           for attempt in $(seq 1 50); do
-            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("nodeUiControlsRelease") == "shared-node-edges-v2-stable-selection"'; then
+            if curl -fsS --max-time 10 'https://investment-n8n-native-editor-production.up.railway.app/api/studio/health' | python3 -c 'import json,sys; assert json.load(sys.stdin).get("nodeUiControlsRelease") == "shared-workflow-final-result-v1"'; then
               echo 'N01 backend Python executor is live'
               break
             fi
