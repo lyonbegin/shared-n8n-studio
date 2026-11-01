@@ -52,7 +52,16 @@ def graph_targets(workflow, node_id):
 def store_node_result(db, *, sid, path, workflow, run_id, workflow_run_id,
                       node_id, input_json, output_json, upstream_run_id=None,
                       input_revision=0, code_ref="", code_sha256="", error=None,
-                      duration_ms=0, status="SUCCESS"):
+                      duration_ms=0, status="SUCCESS", active_source_ports=None):
+    if active_source_ports is not None:
+        if (not isinstance(active_source_ports,list) or
+            not active_source_ports or
+            any(type(p) is not int or p<0 for p in active_source_ports) or
+            len(set(active_source_ports))!=len(active_source_ports)):
+            raise ValueError("INVALID_ACTIVE_SOURCE_PORTS")
+        possible={edge["source_port"] for edge in graph_targets(workflow,node_id)}
+        if not set(active_source_ports).issubset(possible):
+            raise ValueError("ACTIVE_SOURCE_PORT_NOT_CONNECTED")
     if status=="SUCCESS" and not isinstance(output_json,dict):
         raise ValueError("NODE_OUTPUT_MUST_BE_OBJECT")
     now=datetime.now(timezone.utc).isoformat()
@@ -67,6 +76,8 @@ def store_node_result(db, *, sid, path, workflow, run_id, workflow_run_id,
     if status=="SUCCESS":
         import secrets
         for edge in graph_targets(workflow,node_id):
+            if active_source_ports is not None and edge["source_port"] not in active_source_ports:
+                continue
             transfer_id=secrets.token_hex(16)
             db.execute("""INSERT INTO edge_transfers(sid,transfer_id,workflow_path,
               workflow_run_id,edge_key,source_node_id,source_run_id,target_node_id,
