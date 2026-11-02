@@ -497,6 +497,12 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
+        if path == "/api/investment/database/status":
+            sid,new_cookie=self._sid()
+            module=project_adapter.adapter()
+            if not module or not hasattr(module,"investment_database_status"):
+                return self._json(404,{"status":"NOT_CONFIGURED"},sid,new_cookie)
+            return self._json(200,module.investment_database_status(),sid,new_cookie)
         if path == "/api/investment/pipeline":
             sid,new_cookie=self._sid()
             module=project_adapter.adapter()
