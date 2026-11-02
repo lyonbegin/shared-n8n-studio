@@ -497,6 +497,21 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
+        if path == "/api/investment/pipeline":
+            sid,new_cookie=self._sid()
+            module=project_adapter.adapter()
+            if not module or not hasattr(module,"pipeline_read"):
+                return self._json(404,{"error":"PIPELINE_NOT_AVAILABLE"},sid,new_cookie)
+            return self._json(200,module.pipeline_read(sid),sid,new_cookie)
+        if path.startswith("/api/investment/pipeline/"):
+            sid,new_cookie=self._sid()
+            module=project_adapter.adapter()
+            run_id=path.rsplit("/",1)[-1]
+            if not re.fullmatch(r"[0-9a-f]{32}",run_id):
+                return self._json(400,{"error":"INVALID_RUN_ID"},sid,new_cookie)
+            if not module or not hasattr(module,"pipeline_read"):
+                return self._json(404,{"error":"PIPELINE_NOT_AVAILABLE"},sid,new_cookie)
+            return self._json(200,module.pipeline_read(sid,run_id),sid,new_cookie)
         if path == "/api/studio/health":
             return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-workflow-final-result-v1", "nodeEdgeTransferEnabled": True, "projectAdapterConnected": project_adapter.adapter() is not None, "mode": "isolated-demo"})
         if path == "/api/studio/nodes/workspace":
@@ -547,6 +562,28 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(404, {"error": "지원하지 않는 요청"})
 
     def do_POST(self):
+        if urlsplit(self.path).path == "/api/investment/pipeline":
+            sid,new_cookie=self._sid()
+            module=project_adapter.adapter()
+            if not module or not hasattr(module,"pipeline_start"):
+                return self._json(404,{"error":"PIPELINE_NOT_AVAILABLE"},sid,new_cookie)
+            if not self.headers.get("Content-Type","").startswith("application/json"):
+                return self._json(415,{"error":"JSON_REQUIRED"},sid,new_cookie)
+            origin=self.headers.get("Origin")
+            if origin and (urlsplit(origin).netloc!=self.headers.get("Host")
+                           or urlsplit(origin).scheme not in ("http","https")):
+                return self._json(403,{"error":"CROSS_ORIGIN_FORBIDDEN"},sid,new_cookie)
+            try:
+                size=int(self.headers.get("Content-Length","0"))
+                if not 2<=size<=2048:
+                    raise ValueError("PIPELINE_START_BODY_TOO_LARGE")
+                payload=json.loads(self.rfile.read(size))
+                if payload!={}:
+                    raise ValueError("PIPELINE_START_NO_MANUAL_DATA_REQUIRED")
+                result=module.pipeline_start(sid)
+            except (ValueError,TypeError,json.JSONDecodeError) as exc:
+                return self._json(409,{"error":str(exc)},sid,new_cookie)
+            return self._json(202,result,sid,new_cookie)
         if urlsplit(self.path).path == "/api/studio/nodes/execute":
             return self._registered_node_run()
         if urlsplit(self.path).path == "/api/studio/node01/execute":
