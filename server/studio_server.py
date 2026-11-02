@@ -518,6 +518,11 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
+        if path == "/api/investment/session":
+            sid,new_cookie=self._sid()
+            # Establish one stable HttpOnly same-origin session before the
+            # browser fans out parallel API requests for workflows and traces.
+            return self._json(200,{"status":"READY","session_initialized":True},sid,new_cookie)
         if path == "/api/investment/database/status":
             sid,new_cookie=self._sid()
             module=project_adapter.adapter()
