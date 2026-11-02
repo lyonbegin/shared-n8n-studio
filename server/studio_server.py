@@ -529,6 +529,24 @@ class Handler(BaseHTTPRequestHandler):
             if not module or not hasattr(module,"investment_database_status"):
                 return self._json(404,{"status":"NOT_CONFIGURED"},sid,new_cookie)
             return self._json(200,module.investment_database_status(),sid,new_cookie)
+        if path == "/api/investment/source-exact":
+            sid,new_cookie=self._sid()
+            args=parse_qs(urlsplit(self.path).query)
+            requested=(args.get("source_id") or [""])[0]
+            version=(args.get("version_key") or [""])[0]
+            sha=(args.get("source_sha256") or [""])[0]
+            if not re.fullmatch(r"[0-9a-f]{64}",sha):
+                return self._json(400,{"error":"EXACT_SOURCE_SHA256_REQUIRED"},sid,new_cookie)
+            module=project_adapter.adapter()
+            if not module or not hasattr(module,"pipeline_exact_source"):
+                return self._json(404,{"error":"EXACT_SOURCE_REGISTRY_MISSING"},sid,new_cookie)
+            try:
+                entry=module.pipeline_exact_source(requested,version)
+            except ValueError as exc:
+                return self._json(422,{"error":str(exc)},sid,new_cookie)
+            if entry.get("source_sha256")!=sha:
+                return self._json(409,{"error":"PINNED_SOURCE_SHA256_MISMATCH"},sid,new_cookie)
+            return self._json(200,entry,sid,new_cookie)
         if path == "/api/investment/sources":
             sid,new_cookie=self._sid()
             module=project_adapter.adapter()
