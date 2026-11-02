@@ -541,11 +541,31 @@ class Handler(BaseHTTPRequestHandler):
                             counts[table]={"error":type(exc).__name__}
                     pages=db.execute("PRAGMA page_count").fetchone()[0]
                     free_pages=db.execute("PRAGMA freelist_count").fetchone()[0]
+                directories=[]
+                for folder in DB_PATH.parent.iterdir():
+                    if folder.is_dir():
+                        total=0;count=0;largest=[]
+                        for root, dirs, filenames in os.walk(folder):
+                            if count>10000:break
+                            for filename in filenames:
+                                count+=1
+                                try:
+                                    fp=Path(root)/filename
+                                    size=fp.stat().st_size
+                                    total+=size
+                                    if size>2_000_000:
+                                        largest.append({"name":str(fp.relative_to(DB_PATH.parent)),"bytes":size})
+                                except OSError:
+                                    pass
+                        directories.append({"name":folder.name,"total_bytes":total,
+                                            "file_count":count,
+                                            "large_files":sorted(largest,key=lambda x:-x["bytes"])[:10]})
                 return self._json(200,{
                     "status":"ok","volume_bytes":v.f_blocks*v.f_frsize,
                     "free_bytes":v.f_bavail*v.f_frsize,
                     "sqlite_page_count":pages,"sqlite_free_pages":free_pages,
                     "files":sorted(files,key=lambda f:f["bytes"],reverse=True)[:20],
+                    "directories":sorted(directories,key=lambda x:-x["total_bytes"])[:16],
                     "tables":counts},sid,new_cookie)
             except Exception as exc:
                 return self._json(503,{"error":type(exc).__name__+": "+str(exc)[:100]},sid,new_cookie)
