@@ -11,7 +11,10 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import hashlib
+import gzip
 import inspect
+import shutil
+import tempfile
 import time
 from urllib.parse import parse_qs
 import project_adapter_runtime as project_adapter
@@ -36,6 +39,77 @@ MAX_NODES = 350
 SID = re.compile(r"^[a-f0-9]{48}$")
 KEY = re.compile(r"^(operations|scenarios)/[a-zA-Z0-9_.-]+\.json$")
 LOCK = Lock()
+
+def archive_verified_old_sqlite_backup():
+    """One-time space recovery, preserving the old backup as verified gzip.
+
+    The LIVE database and immutable Pine/PG source are never touched.
+    Explicitly scoped to the 2026-11-02 pre-Postgres backup; not a generic
+    backup deletion or retention policy.
+    """
+    backup_dir=DB_PATH.parent/"investment-backups"
+    source=backup_dir/"studio_before_investment_pg_20261102T154812Z.sqlite3"
+    destination=backup_dir/(source.name+".gz")
+    if not source.is_file():
+        return
+    if destination.exists():
+        raise RuntimeError("BACKUP_DUPLICATE_ARCHIVE_REQUIRES_MANUAL_REVIEW")
+    size=source.stat().st_size
+    if size<10_000_000:
+        raise RuntimeError("BACKUP_SIZE_UNEXPECTED_STOP_FOR_MANUAL_REVIEW")
+    with tempfile.TemporaryDirectory(prefix="investment-backup-archive-") as tmp:
+        temporary=Path(tmp)/destination.name
+        source_sha=hashlib.sha256()
+        length=0
+        with open(source,"rb") as reader,gzip.open(temporary,"wb",compresslevel=6) as writer:
+            while True:
+                data=reader.read(1024*1024)
+                if not data:break
+                length+=len(data)
+                source_sha.update(data)
+                writer.write(data)
+        verified=hashlib.sha256()
+        inflated=0
+        with gzip.open(temporary,"rb") as reader:
+            while True:
+                data=reader.read(1024*1024)
+                if not data:break
+                inflated+=len(data)
+                verified.update(data)
+        if inflated!=length or source_sha.hexdigest()!=verified.hexdigest():
+            raise RuntimeError("BACKUP_COMPRESSED_SHA256_VERIFICATION_FAILED")
+        archived_bytes=temporary.stat().st_size
+        if archived_bytes>=size:
+            raise RuntimeError("BACKUP_NOT_COMPRESSIBLE_ABORT_WITHOUT_CHANGES")
+        # Only after the ephemeral gzip was fully verified can the redundant
+        # old snapshot be replaced. The live SQLite is left unchanged.
+        print("STUDIO_BACKUP_VERIFIED_IN_TEMP",source.name,
+              "original_bytes",size,"compressed_bytes",archived_bytes,
+              "sha256",source_sha.hexdigest(),flush=True)
+        source.unlink()
+        staged=destination.with_name(destination.name+".partial")
+        try:
+            with open(temporary,"rb") as reader,open(staged,"wb") as writer:
+                shutil.copyfileobj(reader,writer,length=1024*1024)
+                writer.flush()
+                os.fsync(writer.fileno())
+            final_sha=hashlib.sha256()
+            final_size=0
+            with gzip.open(staged,"rb") as reader:
+                while True:
+                    data=reader.read(1024*1024)
+                    if not data:break
+                    final_sha.update(data)
+                    final_size+=len(data)
+            if final_size!=length or final_sha.hexdigest()!=source_sha.hexdigest():
+                raise RuntimeError("PERSISTED_BACKUP_ARCHIVE_VERIFICATION_FAILED")
+            os.replace(staged,destination)
+        finally:
+            if staged.exists():staged.unlink()
+        print("STUDIO_BACKUP_ARCHIVED_VERIFIED",destination.name,
+              "original_bytes",size,"compressed_bytes",destination.stat().st_size,
+              "sha256",source_sha.hexdigest(),flush=True)
+
 
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -700,6 +774,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(405, {"error": "워크플로 실행 비활성화 · WF01 N01 단독 실행만 지원"})
 
 if __name__ == "__main__":
+    archive_verified_old_sqlite_backup()
     init_db()
     print(f"Shared Studio SQLite draft server listening on :{PORT}; full-workflow executions DISABLED; allowlisted WF01 N01 ONLY", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
