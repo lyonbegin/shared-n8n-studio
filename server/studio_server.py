@@ -276,12 +276,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(415, {"error": "JSON_CONTENT_TYPE_REQUIRED"}, sid, new_cookie)
         try:
             size = int(self.headers.get("Content-Length", "0"))
-            if not 0 < size <= 2048:
+            if not 0 < size <= 600_000:
                 raise ValueError("INPUT_SIZE_INVALID")
             req = json.loads(self.rfile.read(size))
             if not isinstance(req, dict):
                 raise ValueError("REQUEST_OBJECT_REQUIRED")
             path, node_id, data = req.get("workflow"), req.get("node_id"), req.get("input_json")
+            if size > project_adapter.root_input_limit(path,node_id):
+                raise ValueError("INPUT_SIZE_INVALID_FOR_REGISTERED_NODE")
             kind = project_adapter.kind_for(path)
             binding = project_adapter.binding_for(path,node_id)
             if not kind or not binding or binding.get("node_character")!="manual_collection_start":
