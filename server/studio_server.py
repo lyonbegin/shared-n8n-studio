@@ -116,6 +116,19 @@ def validate_workflow(payload: object) -> dict:
     safe["active"] = False  # No public write is allowed to activate a workflow
     return safe
 
+def project_database_trace(workflow,workflow_run_id,node_id,node_name,state,output,error=None):
+    module=project_adapter.adapter()
+    if not module or not hasattr(module,"record_node_execution"):
+        return {"status":"NOT_CONFIGURED"}
+    try:
+        return module.record_node_execution(workflow,workflow_run_id,node_id,node_name,
+                                            state,output,error)
+    except Exception as exc:
+        print("INVESTMENT_POSTGRES_NODE_TRACE_FAILED",
+              workflow,node_id,type(exc).__name__,str(exc)[:180],flush=True)
+        return {"status":"FAILED","error":type(exc).__name__+": "+str(exc)[:160]}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "SharedN8nStudio/1"
     def log_message(self, format, *args):
@@ -328,7 +341,11 @@ class Handler(BaseHTTPRequestHandler):
                 AND run_id NOT IN (SELECT run_id FROM node01_executions
                 WHERE sid=? AND workflow_path=? ORDER BY created_at DESC LIMIT 80)""",
                 (sid, path, sid, path))
+        postgres_trace=project_database_trace(path,run_id,node_id,
+            next((n["name"] for n in workflow["nodes"] if n["id"]==node_id),node_id),
+            state,out,err)
         response = {
+            "postgres_trace":postgres_trace,
             "run_id": run_id, "workflow": path, "node_id": node_id,
             "status": state, "input_json": data, "output_json": out, "error": err,
             "python_module": binding["python_module"],
@@ -480,7 +497,11 @@ class Handler(BaseHTTPRequestHandler):
             if state=="SUCCESS":
                 consume_transfer(db,transfer["transfer_id"],run_id)
             db.commit()
+        postgres_trace=project_database_trace(path,transfer["workflow_run_id"],node_id,
+            next((n["name"] for n in workflow["nodes"] if n["id"]==node_id),node_id),
+            state,output,error)
         return self._json(200 if state=="SUCCESS" else 422,{
+            "postgres_trace":postgres_trace,
             "run_id":run_id,"workflow_run_id":transfer["workflow_run_id"],
             "workflow":path,"node_id":node_id,"status":state,
             "input_json":effective_input,"upstream_output_json":incoming,
