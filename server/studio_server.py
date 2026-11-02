@@ -524,6 +524,12 @@ class Handler(BaseHTTPRequestHandler):
             if not module or not hasattr(module,"investment_database_status"):
                 return self._json(404,{"status":"NOT_CONFIGURED"},sid,new_cookie)
             return self._json(200,module.investment_database_status(),sid,new_cookie)
+        if path == "/api/investment/sources":
+            sid,new_cookie=self._sid()
+            module=project_adapter.adapter()
+            if not module or not hasattr(module,"pipeline_sources"):
+                return self._json(404,{"error":"SOURCE_REGISTRY_NOT_AVAILABLE"},sid,new_cookie)
+            return self._json(200,module.pipeline_sources(),sid,new_cookie)
         if path == "/api/investment/pipeline":
             sid,new_cookie=self._sid()
             module=project_adapter.adapter()
@@ -605,9 +611,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not 2<=size<=2048:
                     raise ValueError("PIPELINE_START_BODY_TOO_LARGE")
                 payload=json.loads(self.rfile.read(size))
-                if payload!={}:
-                    raise ValueError("PIPELINE_START_NO_MANUAL_DATA_REQUIRED")
-                result=module.pipeline_start(sid)
+                if not isinstance(payload,dict) or set(payload)-{"source_id","version_key"}:
+                    raise ValueError("ONLY_EXACT_DB_SOURCE_SELECTION_ALLOWED")
+                if payload and set(payload)!={"source_id","version_key"}:
+                    raise ValueError("SOURCE_AND_VERSION_REQUIRED_TOGETHER")
+                result=module.pipeline_start(sid,payload or None)
             except (ValueError,TypeError,json.JSONDecodeError) as exc:
                 return self._json(409,{"error":str(exc)},sid,new_cookie)
             return self._json(202,result,sid,new_cookie)
