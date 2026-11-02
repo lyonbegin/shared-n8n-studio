@@ -518,6 +518,37 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
+        if path == "/api/investment/storage/status":
+            sid,new_cookie=self._sid()
+            try:
+                v=os.statvfs(DB_PATH.parent)
+                files=[]
+                for f in DB_PATH.parent.iterdir():
+                    if f.is_file():
+                        files.append({"kind":"sqlite" if f.suffix in (".db",".sqlite3") else "other",
+                                      "name":f.name,"bytes":f.stat().st_size})
+                with sqlite3.connect("file:"+str(DB_PATH)+"?mode=ro",uri=True,timeout=8) as db:
+                    db.row_factory=sqlite3.Row
+                    counts={}
+                    for table,col in (("node_runs","length(input_json)+length(coalesce(output_json,''))"),
+                                     ("edge_transfers","length(output_json)"),
+                                     ("investment_pipeline_events","length(payload_json)"),
+                                     ("investment_pine_payloads","length(pine_code)")):
+                        try:
+                            row=db.execute("SELECT count(*),coalesce(sum("+col+"),0) FROM "+table).fetchone()
+                            counts[table]={"rows":row[0],"estimated_payload_bytes":row[1]}
+                        except sqlite3.Error as exc:
+                            counts[table]={"error":type(exc).__name__}
+                    pages=db.execute("PRAGMA page_count").fetchone()[0]
+                    free_pages=db.execute("PRAGMA freelist_count").fetchone()[0]
+                return self._json(200,{
+                    "status":"ok","volume_bytes":v.f_blocks*v.f_frsize,
+                    "free_bytes":v.f_bavail*v.f_frsize,
+                    "sqlite_page_count":pages,"sqlite_free_pages":free_pages,
+                    "files":sorted(files,key=lambda f:f["bytes"],reverse=True)[:20],
+                    "tables":counts},sid,new_cookie)
+            except Exception as exc:
+                return self._json(503,{"error":type(exc).__name__+": "+str(exc)[:100]},sid,new_cookie)
         if path == "/api/investment/session":
             sid,new_cookie=self._sid()
             # Establish one stable HttpOnly same-origin session before the
