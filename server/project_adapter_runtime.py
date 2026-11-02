@@ -37,3 +37,12 @@ def execute_registered(workflow_path,node_id,input_json):
     if not a or not a.node_binding(workflow_path,node_id):
         raise ValueError("UNREGISTERED_PROJECT_NODE")
     return a.execute_node(workflow_path,node_id,input_json)
+
+
+def root_input_limit(workflow_path,node_id):
+    """Project-specific larger manual source import, otherwise 2KB guard."""
+    a=adapter()
+    requested=getattr(a,"root_input_limit",lambda _w,_n:2048)(workflow_path,node_id) if a else 2048
+    if type(requested) is not int or not 2048<=requested<=600000:
+        return 2048
+    return requested
