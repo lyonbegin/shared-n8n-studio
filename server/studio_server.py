@@ -780,5 +780,5 @@ if __name__ == "__main__":
     if WORKFLOW_DIR=="stock-workflows":
         archive_verified_old_sqlite_backup()
     init_db()
-    print(f"Shared Studio SQLite draft server listening on :{PORT}; full-workflow executions DISABLED; allowlisted WF01 N01 ONLY", flush=True)
+    print(f"Shared Studio SQLite draft server listening on :{PORT}; full-workflow executions DISABLED; project-approved per-node execution only; workflow_dir={WORKFLOW_DIR}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
