@@ -726,7 +726,7 @@ async function openStockFlow(file){
    stockOriginal.value=data.original;
    nodes.value=data.nodes.map(n=>({...n,data:{...n.data,state:'idle',stateSource:null}}));edges.value=data.edges;
    sharedWorkspaceOpen.value=false;upstreamForWorkspace.value=null;upstreamRunForWorkspace.value=null;
-   workflowName.value=data.workflowName||STOCK_WORKFLOWS.find(x=>x[0]===file)?.[1]||'투자 워크플로';
+   workflowName.value=data.workflowName||stockWorkflows.find(x=>x[0]===file)?.[1]||(IS_PROCUREMENT?'조달·외주 워크플로':'투자 워크플로');
    selectedNodeId.value=null;selectedEdgeId.value=null;
    history=[];historyIndex=-1;recordHistory();
    // Finish selection reset before the asynchronous run-state restore.
@@ -735,7 +735,7 @@ async function openStockFlow(file){
    await refreshGraphState(file);
    // Revalidate persisted run with project service before enabling final result button.
    await restoreProjectWorkflowRun(file);
-   localStorage.setItem('shared-n8n-studio:investment:selected',file);
+   localStorage.setItem('shared-n8n-studio:'+import.meta.env.VITE_EDITOR_PROJECT+':selected',file);
    announce((serverSource?'서버 저장본':stored?'브라우저 복구본':'실제 원본 n8n JSON')+' 로드 · '+nodes.value.length+'개 노드 · 연결 '+edges.value.length+'개 · '+stockServerState.value);
    if(stockServerAvailable.value)await refreshStockVersions(file);
    nextTick(()=>fitView({padding:.25,duration:150}));
@@ -960,7 +960,7 @@ watch(()=>selectedNodeId.value,()=>{
         </div>
         <div class="bottom-bar">
           <span class="bottom-status"><span class="green-dot"></span>{{status}}</span>
-          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?(stockServerAvailable?'SQLite 서버 저장 · 투자 실행 차단':'서버 미연결 · 브라우저 저장만 가능'):'No API connected'}}</span>
+          <span class="bottom-right"><span>공통 Vue Flow 모듈</span><span class="bottom-divider"></span> {{stockMode?(stockServerAvailable?(IS_PROCUREMENT?'SQLite 저장 · 가상 Python 노드만 실행':'SQLite 서버 저장 · 투자 실행 차단'):'서버 미연결 · 브라우저 저장만 가능'):'No API connected'}}</span>
         </div>
       </section>
 
