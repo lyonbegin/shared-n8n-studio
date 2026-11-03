@@ -226,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store" if "json" in ctype or code != 200 else "public, max-age=120")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-Frame-Options", "SAMEORIGIN" if WORKFLOW_DIR=="procure-workflows" else "DENY")
         if sid and new_cookie:
             secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "").lower() == "https" else ""
             self.send_header("Set-Cookie", "studio_sid="+sid+"; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000"+secure)
@@ -665,6 +665,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path.startswith("/api/procurement/public9/"):
+            sid,cookie=self._sid()
+            if WORKFLOW_DIR!="procure-workflows":
+                return self._json(404,{"error":"PUBLIC9_PROJECT_ONLY"},sid,cookie)
+            try:
+                import procurement_live_gateway as live
+                route=path.removeprefix("/api/procurement/public9/")
+                status,result=live.proxy_get(route,urlsplit(self.path).query)
+                return self._json(status,result,sid,cookie)
+            except (ValueError,TypeError) as exc:
+                return self._json(400,{"error":str(exc),"real_source_only":True},sid,cookie)
+            except Exception as exc:
+                return self._json(503,{"error":"ACTUAL_G2B_BACKEND_UNAVAILABLE",
+                    "detail":type(exc).__name__,"no_mock_fallback":True},sid,cookie)
         if path == "/api/procurement/public/actual-records":
             sid,cookie=self._sid()
             if WORKFLOW_DIR!="procure-workflows":
@@ -847,6 +861,30 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(404, {"error": "지원하지 않는 요청"})
 
     def do_POST(self):
+        if urlsplit(self.path).path=="/api/procurement/public9/prepare":
+            sid,cookie=self._sid()
+            if WORKFLOW_DIR!="procure-workflows":
+                return self._json(404,{"error":"PUBLIC9_PROJECT_ONLY"},sid,cookie)
+            origin=self.headers.get("Origin")
+            if origin:
+                parsed=urlsplit(origin)
+                if parsed.netloc!=self.headers.get("Host") or parsed.scheme not in ("http","https"):
+                    return self._json(403,{"error":"CROSS_ORIGIN_FORBIDDEN"},sid,cookie)
+            if not self.headers.get("Content-Type","").startswith("application/json"):
+                return self._json(415,{"error":"JSON_REQUIRED"},sid,cookie)
+            try:
+                size=int(self.headers.get("Content-Length","0"))
+                if not 2<=size<=1200:
+                    raise ValueError("PUBLIC_PREPARE_BODY_SIZE_INVALID")
+                body=json.loads(self.rfile.read(size))
+                import procurement_live_gateway as live
+                status,result=live.start_real_case(body,self.headers.get("Authorization"))
+                return self._json(status,result,sid,cookie)
+            except (TypeError,ValueError,json.JSONDecodeError) as exc:
+                return self._json(400,{"error":str(exc)},sid,cookie)
+            except Exception as exc:
+                return self._json(503,{"error":"ACTUAL_G2B_WORKER_API_UNAVAILABLE",
+                    "detail":type(exc).__name__,"queued":False},sid,cookie)
         if urlsplit(self.path).path == "/api/investment/pipeline":
             sid,new_cookie=self._sid()
             module=project_adapter.adapter()
