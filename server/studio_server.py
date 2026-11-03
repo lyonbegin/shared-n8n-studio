@@ -665,6 +665,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path == "/api/procurement/public/verified-evidence":
+            sid,cookie=self._sid()
+            if WORKFLOW_DIR!="procure-workflows":
+                return self._json(404,{"error":"PROJECT_ONLY_PUBLIC_EVIDENCE"},sid,cookie)
+            try:
+                import procurement_readonly_bridge
+                observed=procurement_readonly_bridge.read_original_evidence()
+                return self._json(200,observed,sid,cookie)
+            except Exception as exc:
+                # A read failure MUST NEVER be portrayed as '0 accepted' or READY.
+                return self._json(503,{"error":"ORIGINAL_BUSINESS_DB_UNAVAILABLE_OR_INVALID",
+                    "reason":type(exc).__name__,
+                    "official_data_verified":False,"read_only":True},sid,cookie)
         if path in ("/api/procurement/console/status", "/api/procurement/console/run"):
             return self._procurement_console_api(path)
         if path == "/health":
