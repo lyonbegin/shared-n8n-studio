@@ -6,14 +6,16 @@ import {Controls} from '@vue-flow/controls';
 import {MiniMap} from '@vue-flow/minimap';
 import {NODE_CATALOG,NODE_GROUPS,NODE_BY_KIND,defaultParameters,visibleFields,validateParameters} from './node-catalog.js';
 import {STOCK_WORKFLOWS,fromN8nWorkflow,toN8nWorkflow} from './investment-adapter.js';
+import {PROCURE_WORKFLOWS} from './procurement-adapter.js';
 import {readN8nExecutionFile} from './n8n-execution-inspector.js';
 import SharedNodeWorkspace from './SharedNodeWorkspace.vue';
 import WorkflowRunPanel from './WorkflowRunPanel.vue';
 
-const STOCK_MODE=import.meta.env.VITE_EDITOR_PROJECT==='investment';
+const IS_PROCUREMENT=import.meta.env.VITE_EDITOR_PROJECT==='procurement';
+const STOCK_MODE=import.meta.env.VITE_EDITOR_PROJECT==='investment'||IS_PROCUREMENT;
 const STORAGE_KEY='shared-n8n-studio:playground:v1';
 const stockMode=STOCK_MODE;
-const stockWorkflows=STOCK_WORKFLOWS;
+const stockWorkflows=IS_PROCUREMENT?PROCURE_WORKFLOWS:STOCK_WORKFLOWS;
 const stockFlow=ref(stockWorkflows[0][0]);
 const stockOriginal=ref(null);
 const stockServerVersion=ref(0);
@@ -241,10 +243,11 @@ function runNodeFromWorkspace(input){
 
 const sharedWorkspaceNodeId=ref(null);
 const sharedWorkspaceNode=computed(()=>nodes.value.find(n=>n.id===sharedWorkspaceNodeId.value)||null);
-const sharedWorkspaceDefaultInput=computed(()=>({
-  ...(sharedWorkspaceNodeId.value?.startsWith('wf01-strategy-01')?{ui_selection:'strategy',requested_detail_limit:1}:
-     sharedWorkspaceNodeId.value?.startsWith('wf01-library-01')?{ui_selection:'library',requested_detail_limit:1}:{})
-}));
+const sharedWorkspaceDefaultInput=computed(()=>IS_PROCUREMENT
+  ?(sharedWorkspaceNode.value?.data?.parameters?.studioPython?.node_character==='manual_collection_start'
+    ?(stockOriginal.value?.meta?.studioDefaultInput||{}):{})
+  :({...((sharedWorkspaceNodeId.value?.startsWith('wf01-strategy-01'))?{ui_selection:'strategy',requested_detail_limit:1}:
+     sharedWorkspaceNodeId.value?.startsWith('wf01-library-01')?{ui_selection:'library',requested_detail_limit:1}:{})}));
 const sharedWorkspaceDraft=computed(()=>{
   const p=sharedWorkspaceNode.value?.data?.parameters||{};
   const binding=p.studioPython;
@@ -285,7 +288,7 @@ async function runSharedNodeFromCard(id){
     const data=await response.json();
     if(stockFlow.value!==workflow)return;
     const kind=workflow.includes('latest-library-one')?'library':'strategy';
-    const input=data.workspace?.revision?data.workspace.input_json:{ui_selection:kind,requested_detail_limit:1};
+    const input=data.workspace?.revision?data.workspace.input_json:(IS_PROCUREMENT?stockOriginal.value?.meta?.studioDefaultInput:{ui_selection:kind,requested_detail_limit:1});
     await executeNode01(input,id);
   }catch(e){
     if(stockFlow.value===workflow){
@@ -301,6 +304,7 @@ const node01Running=ref(false);
 const node01Eligible=computed(()=>{
   const n=selectedNode.value;
   if(!stockMode||!n)return false;
+  if(IS_PROCUREMENT)return n.data.n8n?.type==='n8n-nodes-base.manualTrigger'&&n.data.parameters?.studioPython?.node_character==='manual_collection_start';
   const kind=stockFlow.value==='operations/WF01-latest-strategy-one.json'?'strategy':stockFlow.value==='operations/WF01-latest-library-one.json'?'library':null;
   return Boolean(kind&&n.id==='wf01-'+kind+'-01'&&n.data.n8n?.type==='n8n-nodes-base.manualTrigger'
     &&n.data.parameters?.studioPython?.python_function==='execute_node01');
@@ -361,7 +365,7 @@ async function executeNode01(overrideInput=null, targetNodeId=selectedNodeId.val
 }
 
 const runFileInput=ref(null);
-const storageKey=()=>stockMode?'shared-n8n-studio:investment:v1:'+stockFlow.value:STORAGE_KEY;
+const storageKey=()=>stockMode?'shared-n8n-studio:'+import.meta.env.VITE_EDITOR_PROJECT+':v1:'+stockFlow.value:STORAGE_KEY;
 const palette=NODE_CATALOG;
 const paletteGroups=NODE_GROUPS;
 const paletteMap=NODE_BY_KIND;
@@ -840,10 +844,10 @@ watch(()=>selectedNodeId.value,()=>{
       <aside class="left-panel">
         <div class="section-overline">WORKSPACE</div>
         <div class="project-tile">
-          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>{{stockMode?('Investment · '+stockWorkflows.length+'개 워크플로 · 편집 전용'):'Canvas interaction test'}}</small></div><span class="project-menu">•••</span>
+          <span class="project-monogram">S</span><div><b>Shared n8n Studio</b><small>{{stockMode?((IS_PROCUREMENT?'ProcureFlow':'Investment')+' · '+stockWorkflows.length+'개 워크플로 · 편집 전용'):'Canvas interaction test'}}</small></div><span class="project-menu">•••</span>
         </div>
         <div class="sidebar-separator"></div>
-        <div class="section-heading"><b>{{stockMode?'투자 자동화 워크플로':'샘플 워크플로'}}</b><small>{{stockMode?stockWorkflows.length:3}}</small></div>
+        <div class="section-heading"><b>{{stockMode?(IS_PROCUREMENT?'조달·외주 3개 시장 워크플로':'투자 자동화 워크플로'):'샘플 워크플로'}}</b><small>{{stockMode?stockWorkflows.length:3}}</small></div>
         <div v-if="stockMode" class="sample-list" data-testid="stock-workflows">
           <button v-for="[file,label] in stockWorkflows" :key="file" class="sample-item" :class="{active:stockFlow===file}" :data-stock-flow="file" @click="openStockFlow(file)">
             <span class="sample-icon">↗</span><span><b>{{label}}</b><small>{{file.startsWith('operations')?'운영 워크플로':'시나리오 테스트'}}</small></span><span class="sample-chevron">›</span>
