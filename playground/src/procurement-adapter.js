@@ -33,5 +33,5 @@ export const PROCURE_WORKFLOWS=Object.freeze([
   ['scenarios/S09.json','S09 · 독립 감사 오류 (가상)'],
   ['scenarios/S10.json','S10 · 동시 발주 경합 (가상)']
 ]);
-if(PROCURE_WORKFLOWS.length!==29 || new Set(PROCURE_WORKFLOWS.map(([path])=>path)).size!==26)
+if(PROCURE_WORKFLOWS.length!==29 || new Set(PROCURE_WORKFLOWS.map(([path])=>path)).size!==29)
   throw Error('ProcureFlow studio workflow catalog must contain 29 unique n8n JSON files');
