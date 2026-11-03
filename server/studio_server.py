@@ -591,8 +591,82 @@ class Handler(BaseHTTPRequestHandler):
             "persistence":"sqlite","tradingview_called":False,
             "next_node_executed":False},sid,new_cookie)
 
+    def _procurement_console_api(self, endpoint):
+        """Read only, cookie-scoped run traces and SQLite metrics for procurement QA.
+        This endpoint cannot launch runs, fetch official data, or modify n8n users.
+        """
+        sid,new_cookie=self._sid()
+        if WORKFLOW_DIR!="procure-workflows":
+            return self._json(404,{"error":"PROJECT_CONSOLE_NOT_AVAILABLE"},sid,new_cookie)
+        try:
+            with db_connect() as db:
+                if endpoint=="/api/procurement/console/status":
+                    counts={}
+                    for name,table in (
+                        ("node_runs","node_runs"),("edge_transfers","edge_transfers"),
+                        ("drafts","snapshots"),("draft_revisions","revisions"),
+                        ("node_workspaces","node_workspaces")):
+                        try:
+                            counts[name]=db.execute("SELECT count(*) FROM "+table+" WHERE sid=?",(sid,)).fetchone()[0]
+                        except sqlite3.OperationalError:
+                            counts[name]=None
+                    counts["workflow_runs"]=db.execute(
+                        "SELECT count(DISTINCT workflow_run_id) FROM node_runs WHERE sid=?",(sid,)).fetchone()[0]
+                    rows=db.execute("""SELECT workflow_path,workflow_run_id,
+                          COUNT(*) AS completed_nodes, MAX(created_at) AS last_at
+                        FROM node_runs WHERE sid=? AND workflow_path IN
+                        ('operations/A01-public-win-strategy.json',
+                         'operations/B01-private-software-proposal.json',
+                         'operations/C01-staffing-service-proposal.json')
+                        GROUP BY workflow_path,workflow_run_id
+                        ORDER BY last_at DESC LIMIT 25""",(sid,)).fetchall()
+                    recent=[]
+                    for row in rows:
+                        last=db.execute("""SELECT status,output_json,error,node_id,
+                              duration_ms FROM node_runs WHERE sid=? AND
+                              workflow_run_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1""",
+                              (sid,row["workflow_run_id"])).fetchone()
+                        output=json.loads(last["output_json"]) if last and last["output_json"] else {}
+                        recent.append({"workflow":row["workflow_path"],
+                            "workflow_run_id":row["workflow_run_id"],
+                            "completed_nodes":row["completed_nodes"],
+                            "last_at":row["last_at"],
+                            "last_node_id":last["node_id"] if last else None,
+                            "last_status":last["status"] if last else "UNKNOWN",
+                            "decision":output.get("decision"),
+                            "last_error":last["error"] if last else None})
+                elif endpoint=="/api/procurement/console/run":
+                    params=parse_qs(urlsplit(self.path).query)
+                    run_id=(params.get("workflow_run_id") or [""])[0]
+                    if not re.fullmatch(r"[a-f0-9]{32}",run_id):
+                        return self._json(400,{"error":"INVALID_WORKFLOW_RUN_ID"},sid,new_cookie)
+                    rows=db.execute("""SELECT node_id,run_id,workflow_run_id,workflow_path,status,
+                       input_json,output_json,error,code_ref,code_sha256,duration_ms,created_at
+                       FROM node_runs WHERE sid=? AND workflow_run_id=?
+                       ORDER BY created_at ASC,rowid ASC LIMIT 40""",(sid,run_id)).fetchall()
+                    if not rows:
+                        return self._json(404,{"error":"RUN_NOT_FOUND_IN_THIS_BROWSER_SESSION"},sid,new_cookie)
+                    data=[{**dict(row),"input_json":json.loads(row["input_json"]),
+                          "output_json":json.loads(row["output_json"]) if row["output_json"] else None}
+                          for row in rows]
+                    return self._json(200,{"workflow_run_id":run_id,"workflow":data[0]["workflow_path"],
+                       "simulation_only":True,"actual_n8n_execution":False,
+                       "nodes":data},sid,new_cookie)
+                else:
+                    return self._json(404,{"error":"UNKNOWN_CONSOLE_API"},sid,new_cookie)
+            return self._json(200,{"status":"ok","project":"procureflow",
+                "scope":"this_browser_session","data_source":"sqlite",
+                "simulation_only":True,"actual_n8n_execution":False,
+                "official_g2b_collection":False,"bid_submission":False,
+                "metrics":counts,"recent_runs":recent},sid,new_cookie)
+        except (ValueError,TypeError,sqlite3.DatabaseError) as exc:
+            return self._json(500,{"error":"CONSOLE_DB_READ_FAILED",
+                "detail":type(exc).__name__},sid,new_cookie)
+
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path in ("/api/procurement/console/status", "/api/procurement/console/run"):
+            return self._procurement_console_api(path)
         if path == "/health":
             return self._send(200, b"ok", "text/plain")
         if path == "/api/investment/storage/status":
