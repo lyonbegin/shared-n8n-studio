@@ -643,7 +643,7 @@ class Handler(BaseHTTPRequestHandler):
                     rows=db.execute("""SELECT node_id,run_id,workflow_run_id,workflow_path,status,
                        input_json,output_json,error,code_ref,code_sha256,duration_ms,created_at
                        FROM node_runs WHERE sid=? AND workflow_run_id=?
-                       ORDER BY created_at ASC,rowid ASC LIMIT 40""",(sid,run_id)).fetchall()
+                       ORDER BY created_at ASC,rowid ASC LIMIT 128""",(sid,run_id)).fetchall()
                     if not rows:
                         return self._json(404,{"error":"RUN_NOT_FOUND_IN_THIS_BROWSER_SESSION"},sid,new_cookie)
                     data=[{**dict(row),"input_json":json.loads(row["input_json"]),
