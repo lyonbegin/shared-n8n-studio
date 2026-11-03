@@ -677,7 +677,7 @@ async function importN8nExecution(event){
  }catch(err){announce('실행 결과 불러오기 실패: '+err.message);}
 }
 async function openStockFlow(file){
- if(!stockMode||!STOCK_WORKFLOWS.some(([id])=>id===file))return;
+ if(!stockMode||!stockWorkflows.some(([id])=>id===file))return;
  stockFlow.value=file;
  workflowRunPanelOpen.value=false;workflowRunResult.value=null;
  workflowRunTrace.value=null;workflowRunError.value='';
@@ -685,7 +685,7 @@ async function openStockFlow(file){
  clearImportedExecution(true);
  // Persist route synchronously, not only after network fetch, to avoid
  // restoring a stale F01 when the user reloads immediately after an edit.
- localStorage.setItem('shared-n8n-studio:investment:selected',file);
+ localStorage.setItem('shared-n8n-studio:'+import.meta.env.VITE_EDITOR_PROJECT+':selected',file);
  const route=new URL(window.location.href);
  route.searchParams.set('workflow',file);
  window.history.replaceState(null,'',route.pathname+route.search+route.hash);
@@ -708,7 +708,7 @@ async function openStockFlow(file){
      stockVersionRows.value=[];
      stockServerVersion.value=0;
      stockServerState.value='서버 연결 없음';
-     const response=await fetch('/stock-workflows/'+file,{cache:'no-store'});
+     const response=await fetch('/'+(IS_PROCUREMENT?'procure-workflows':'stock-workflows')+'/'+file,{cache:'no-store'});
      if(!response.ok)throw Error('원본 워크플로 HTTP '+response.status);
      data=fromN8nWorkflow(await response.json());
    }
@@ -853,8 +853,8 @@ onMounted(()=>{
   recordHistory();
   if(stockMode){
     const path=new URLSearchParams(window.location.search).get('workflow');
-    const last=localStorage.getItem('shared-n8n-studio:investment:selected');
-    const chosen=STOCK_WORKFLOWS.some(x=>x[0]===path)?path:STOCK_WORKFLOWS.some(x=>x[0]===last)?last:STOCK_WORKFLOWS[0][0];
+    const last=localStorage.getItem('shared-n8n-studio:'+import.meta.env.VITE_EDITOR_PROJECT+':selected');
+    const chosen=stockWorkflows.some(x=>x[0]===path)?path:stockWorkflows.some(x=>x[0]===last)?last:stockWorkflows[0][0];
     openStockFlow(chosen);
   }
   else nextTick(()=>fitView({padding:.23,duration:0}));
@@ -871,9 +871,9 @@ watch(()=>selectedNodeId.value,()=>{
       <div class="brand">
         <div class="brand-mark"><span></span><span></span><span></span><span></span></div>
         <div class="brand-text"><strong>n8n <em>Studio</em></strong><small>SHARED EDITOR LAB</small></div>
-        <span class="brand-divider"></span><span class="brand-trailing">{{stockMode?'투자 자동화 · 공통 편집기':'Playground'}}</span>
+        <span class="brand-divider"></span><span class="brand-trailing">{{stockMode?(IS_PROCUREMENT?'조달·외주 자동화 · 공통 편집기':'투자 자동화 · 공통 편집기'):'Playground'}}</span>
       </div>
-      <div class="environment"><span class="pulse-dot"></span> {{stockMode?'주식 자동화 · 공통 n8n 모듈':'독립 테스트 환경'}} <span class="env-separator">/</span> <b>{{stockMode?'편집·데이터 어댑터':'LOCAL ONLY'}}</b></div>
+      <div class="environment"><span class="pulse-dot"></span> {{stockMode?(IS_PROCUREMENT?'조달·외주 3개 시장 · 공통 n8n 모듈':'주식 자동화 · 공통 n8n 모듈'):'독립 테스트 환경'}} <span class="env-separator">/</span> <b>{{stockMode?'편집·데이터 어댑터':'LOCAL ONLY'}}</b></div>
       <div class="top-actions">
         <button class="icon-btn outline" title="도움말" aria-label="도움말" @click="showHelp=!showHelp">?</button>
         <a class="github-link" href="https://github.com/lyonbegin/shared-n8n-studio" target="_blank" rel="noopener">GitHub <span>↗</span></a>
