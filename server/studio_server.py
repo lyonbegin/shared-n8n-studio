@@ -31,7 +31,10 @@ from threading import Lock
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(os.environ.get("STUDIO_STATIC_ROOT", "/app/dist")).resolve()
-WORKFLOW_ROOT = (ROOT / "stock-workflows").resolve()
+WORKFLOW_DIR=os.environ.get("STUDIO_WORKFLOW_DIR","stock-workflows")
+if WORKFLOW_DIR not in ("stock-workflows","procure-workflows"):
+    raise RuntimeError("INVALID_STUDIO_WORKFLOW_DIR")
+WORKFLOW_ROOT = (ROOT / WORKFLOW_DIR).resolve()
 DB_PATH = Path(os.environ.get("STUDIO_DB_PATH", "/data/studio.sqlite3"))
 PORT = int(os.environ.get("PORT", "3000"))
 MAX_BYTES = 1_048_576
@@ -694,7 +697,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(404,{"error":"PIPELINE_NOT_AVAILABLE"},sid,new_cookie)
             return self._json(200,module.pipeline_read(sid,run_id),sid,new_cookie)
         if path == "/api/studio/health":
-            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-workflow-final-result-v1", "nodeEdgeTransferEnabled": True, "projectAdapterConnected": project_adapter.adapter() is not None, "mode": "isolated-demo"})
+            return self._json(200, {"status": "ok", "storage": "sqlite", "executionEnabled": False, "node01ExecutionEnabled": True, "nodeWorkspaceVersioned": True, "nodeUiControlsRelease": "shared-procurement-three-market-v1" if WORKFLOW_DIR=="procure-workflows" else "shared-workflow-final-result-v1", "nodeEdgeTransferEnabled": True, "projectAdapterConnected": project_adapter.adapter() is not None, "mode": "isolated-demo"})
         if path == "/api/studio/nodes/workspace":
             return self._node_workspace("GET")
         if path == "/api/studio/nodes/workspace/revisions":
@@ -774,7 +777,8 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(405, {"error": "워크플로 실행 비활성화 · WF01 N01 단독 실행만 지원"})
 
 if __name__ == "__main__":
-    archive_verified_old_sqlite_backup()
+    if WORKFLOW_DIR=="stock-workflows":
+        archive_verified_old_sqlite_backup()
     init_db()
     print(f"Shared Studio SQLite draft server listening on :{PORT}; full-workflow executions DISABLED; allowlisted WF01 N01 ONLY", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
