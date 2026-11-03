@@ -941,7 +941,7 @@ watch(()=>selectedNodeId.value,()=>{
           </div>
         </div>
         <div class="canvas-info">
-          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?('Investment · '+stockWorkflows.length+'개 저장 가능한 워크플로'):'Editor playground'}}</b></div>
+          <div class="crumbs"><span>WORKFLOWS</span><span class="crumb-arrow">/</span><b>{{stockMode?((IS_PROCUREMENT?'ProcureFlow':'Investment')+' · '+stockWorkflows.length+'개 저장 가능한 워크플로'):'Editor playground'}}</b></div>
           <div class="canvas-stats"><span class="stat"><span class="stat-dot purple"></span> {{nodeCount}} Nodes</span><span class="stat"><span class="stat-dot blue"></span> {{edgeCount}} Connections</span><span class="stat-divider"></span><span class="safe-label">● {{stockMode?(workflowRunConfig?'프로젝트 Python 검증 단계 실행 · 완료 후 마지막 노드에서 차트 보기':('DB '+(stockServerAvailable?'연결됨 · v'+stockServerVersion:'미연결')+' · 노드별 승인된 실행만 허용')):'모의 데이터 전용'}}</span></div>
         </div>
         <div class="canvas-holder" data-testid="canvas-holder" @dragover="onDragOver" @drop="onDrop">
@@ -955,7 +955,7 @@ watch(()=>selectedNodeId.value,()=>{
             <Controls position="bottom-left" :show-interactive="false"/>
             <MiniMap position="bottom-right" :node-color="n=>paletteMap[n.data.kind]?.color||'#8c9fb2'" :mask-color="'rgba(238,244,250,.72)'"/>
           </VueFlow>
-          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> {{stockMode?'INVESTMENT':'PLAYGROUND'}}</div>
+          <div class="canvas-watermark"><span>◈</span> SHARED N8N STUDIO <i>·</i> {{stockMode?(IS_PROCUREMENT?'PROCUREFLOW':'INVESTMENT'):'PLAYGROUND'}}</div>
           <div class="canvas-controls-hint">좌클릭 드래그: 화면 이동 <span>·</span> Shift + 드래그: 다중 선택 <span>·</span> 노드 핸들: 연결</div>
         </div>
         <div class="bottom-bar">
