@@ -665,6 +665,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path == "/api/procurement/public/actual-records":
+            sid,cookie=self._sid()
+            if WORKFLOW_DIR!="procure-workflows":
+                return self._json(404,{"error":"PUBLIC_ONLY_RECORDS"},sid,cookie)
+            try:
+                import procurement_actual_records
+                records=procurement_actual_records.read_actual()
+                return self._json(200,records,sid,cookie)
+            except Exception as exc:
+                return self._json(503,{
+                    "error":"ACTUAL_G2B_DATA_SOURCE_UNAVAILABLE",
+                    "detail":type(exc).__name__,"real_records_loaded":False,
+                    "not_a_mock_fallback":True
+                },sid,cookie)
         if path == "/api/procurement/public/verified-evidence":
             sid,cookie=self._sid()
             if WORKFLOW_DIR!="procure-workflows":
