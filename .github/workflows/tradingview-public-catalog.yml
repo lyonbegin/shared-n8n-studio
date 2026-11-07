@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - ".github/workflows/tradingview-public-catalog.yml"
+      - "tools/tradingview_catalog_collect.py"
   workflow_dispatch:
 jobs:
   collect-public-catalog:
