@@ -29,7 +29,7 @@ jobs:
         run: pip install requests beautifulsoup4
       - name: Collect unfiltered public listing and full script descriptions
         run: |
-                    if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
             MAX_PAGES=2; MAX_DETAILS=40
           else
             MAX_PAGES="${{ inputs.max_pages }}"; MAX_DETAILS="${{ inputs.max_details }}"
