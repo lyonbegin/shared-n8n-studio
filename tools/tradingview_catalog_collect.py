@@ -78,6 +78,9 @@ def main():
         for page in range(1,a.max_pages+1):
             url=listurl(kind,page);code,html,error=fetch(url)
             rows=parse_listing(html,kind,page) if html else [];new=0
+            if html and not rows and page==1:
+                (out/("debug_"+kind+".html")).write_text(html[:200000],encoding="utf-8")
+                print("DEBUG_HTML",kind,"len",len(html),"sample",repr(html[:650]),flush=True)
             for r in rows:
                 if r["url"] not in found:found[r["url"]]=r;new+=1
             listpages.append(dict(url=url,kind=kind,page=page,status=code,count=len(rows),new=new,error=error))
