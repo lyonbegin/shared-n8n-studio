@@ -1,21 +1,46 @@
-name: TradingView public catalog archive
+name: TradingView Strategy-only full-description collection
 on:
   push:
     paths:
-      - ".github/workflows/tradingview-public-catalog.yml"
       - "tools/tradingview_catalog_collect.py"
+      - ".github/workflows/tradingview-public-catalog.yml"
   workflow_dispatch:
     inputs:
-      max_pages:
-        description: Pages per category
-        default: '100'
+      start_page:
+        description: "First TradingView Strategy listing page"
         required: false
-      max_details:
-        description: Maximum script detail pages
-        default: '10000'
+        default: "1"
+      page_count:
+        description: "Number of Strategy listing pages"
         required: false
+        default: "200"
 jobs:
-  collect-public-catalog:
+  strategy-first-batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+      - name: Crawl first three Strategy listing pages and ALL discovered details
+        run: |
+          python tools/tradingview_catalog_collect.py --start-page 1 --max-pages 3 --delay 1.3 --output tradingview_strategy_first_batch
+          python -c "import json; m=json.load(open('tradingview_strategy_first_batch/manifest.json')); assert m['discovered_unique']>0 and m['details_attempted']==m['discovered_unique'],m"
+      - name: Upload first strategy-only archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-strategy-first-3-pages
+          path: tradingview_strategy_first_batch/
+          retention-days: 30
+          if-no-files-found: warn
+  strategy-pages-collection:
+    needs: strategy-first-batch
     runs-on: ubuntu-latest
     timeout-minutes: 330
     permissions:
@@ -25,21 +50,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install parsers
+      - name: Install dependencies
         run: pip install requests beautifulsoup4
-      - name: Collect unfiltered public listing and full script descriptions
+      - name: Discover Strategy pages and download ALL discovered descriptions
+        env:
+          START_PAGE: ${{ inputs.start_page || '1' }}
+          PAGE_COUNT: ${{ inputs.page_count || '200' }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            MAX_PAGES=2; MAX_DETAILS=40
-          else
-            MAX_PAGES="${{ inputs.max_pages }}"; MAX_DETAILS="${{ inputs.max_details }}"
-          fi
-          python tools/tradingview_catalog_collect.py --max-pages "$MAX_PAGES" --max-details "$MAX_DETAILS" --delay 2.5 --output tradingview_catalog_output
-      - name: Upload collected raw records and coverage report
+          python tools/tradingview_catalog_collect.py --start-page "$START_PAGE" --max-pages "$PAGE_COUNT" --delay 2.5 --output tradingview_strategy_catalog
+          python -c "import json; m=json.load(open('tradingview_strategy_catalog/manifest.json')); assert m['details_attempted']==m['discovered_unique'],m"
+      - name: Upload strategy-only corpus and audit manifest
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tradingview-public-scripts-with-descriptions
-          path: tradingview_catalog_output/
+          name: tradingview-strategy-only-pages
+          path: tradingview_strategy_catalog/
           retention-days: 30
           if-no-files-found: warn
