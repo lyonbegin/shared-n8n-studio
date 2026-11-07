@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Unfiltered public TradingView listing crawler. Archive before classification."""
+"""TradingView public Strategy-only listing crawler. Archive first; classify later."""
 import argparse,csv,datetime as dt,json,re,time,urllib.parse,urllib.robotparser,zipfile
 from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 BASE="https://www.tradingview.com"
 UA="StockAutomationCatalog/1.0 (public descriptions only)"
-TYPES=("all","indicators","strategies","libraries")
+TYPES=("strategies",)
 def now():return dt.datetime.now(dt.timezone.utc).isoformat()
 def clean(s):return re.sub(r"\s+"," ",s or "").strip()
 def canonical(href):
@@ -49,8 +49,7 @@ def savejsonl(path,rows):
         for r in rows:f.write(json.dumps(r,ensure_ascii=False)+"\n")
 def main():
     p=argparse.ArgumentParser()
-    p.add_argument("--max-pages",type=int,default=40)
-    p.add_argument("--max-details",type=int,default=1500)
+    p.add_argument("--max-pages",type=int,default=300)
     p.add_argument("--delay",type=float,default=2.5)
     p.add_argument("--output",default="tradingview_catalog_output")
     a=p.parse_args();out=Path(a.output);out.mkdir(parents=True,exist_ok=True)
@@ -78,20 +77,17 @@ def main():
         for page in range(1,a.max_pages+1):
             url=listurl(kind,page);code,html,error=fetch(url)
             rows=parse_listing(html,kind,page) if html else [];new=0
-            if html and not rows and page==1:
-                (out/("debug_"+kind+".html")).write_text(html[:200000],encoding="utf-8")
-                print("DEBUG_HTML",kind,"len",len(html),"sample",repr(html[:650]),flush=True)
             for r in rows:
                 if r["url"] not in found:found[r["url"]]=r;new+=1
             listpages.append(dict(url=url,kind=kind,page=page,status=code,count=len(rows),new=new,error=error))
             if error:errors.append(dict(stage="list",url=url,error=error))
             print("LIST",kind,page,code,len(rows),new,error,flush=True)
-            blank=blank+1 if not rows else 0
+            blank=blank+1 if not new else 0
             if blank>=2 or blocked or error in ("robots_disallowed","robots_unavailable"):break
         if blocked:break
     records=list(found.values());savejsonl(out/"listing_discovery.jsonl",records)
     details=[]
-    for r in records[:a.max_details]:
+    for r in records:
         code,html,error=fetch(r["url"]);row={**r,"script_id":r["url"].split("/")[4].split("-",1)[0],
              "slug":r["url"].split("/")[4].split("-",1)[1],"title":"","author":"","description":"",
              "status":code,"fetched_at":now(),"error":error}
@@ -105,14 +101,14 @@ def main():
         fields=["url","script_id","slug","listing_type","listing_page","listing_title","listing_description","title","author","description","status","fetched_at","error"]
         w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(details)
     savejsonl(out/"listing_pages.jsonl",listpages);savejsonl(out/"errors.jsonl",errors)
-    m=dict(created_at=now(),source=BASE+"/scripts/",types=TYPES,max_pages=a.max_pages,
+    m=dict(created_at=now(),source=BASE+"/scripts/?script_type=strategies",types=TYPES,max_pages=a.max_pages,
            discovered_unique=len(records),details_attempted=len(details),
            detail_descriptions=sum(bool(x["description"]) for x in details),
            listing_pages=len(listpages),errors=len(errors),blocked=blocked,
            coverage="PARTIAL_NOT_PROVEN_COMPLETE",classification_performed=False,
-           note="Listing-page discovery without keyword filter. Inaccessible pages and descriptions are recorded. Full site coverage not asserted.")
+           note="Strategy-only listing traversal; no keyword filters or detail-count cap. Public page limits and access failures are tracked; full coverage not asserted.")
     (out/"manifest.json").write_text(json.dumps(m,indent=2,ensure_ascii=False),encoding="utf-8")
-    (out/"README.md").write_text("# TradingView 공개 전략/지표 원문 설명 수집\n\n키워드 필터 없이 목록 페이지를 순회하였습니다. 분류 전 원자료입니다.\n\n전수 완료는 증명되지 않았으며, 차단·누락은 manifest.json 및 errors.jsonl을 확인하십시오.\n",encoding="utf-8")
+    (out/"README.md").write_text("# TradingView 공개 Strategy 전용 원문 수집\n\nStrategy 유형 페이지만 순회하고 해당 목록에 등장한 스크립트의 상세 페이지를 **발견한 만큼 전부** 조회합니다. Indicator와 Library 별도 수집은 하지 않습니다.\n\n키워드 검색/사전 분류를 사용하지 않습니다. 페이지 제한 도달 또는 공개 목록 접근 제한 때문에 전수 완료는 증명되지 않았습니다.\n\n원본 URL, 작성자, 설명과 각 호출의 상태는 csv/jsonl 및 manifest에 기록됩니다.\n",encoding="utf-8")
     with zipfile.ZipFile(out/"tradingview_catalog_raw.zip","w",zipfile.ZIP_DEFLATED) as z:
         for x in out.iterdir():
             if x.is_file() and x.name!="tradingview_catalog_raw.zip":z.write(x,x.name)
