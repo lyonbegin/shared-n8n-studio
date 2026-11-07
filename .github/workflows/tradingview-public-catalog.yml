@@ -1,0 +1,30 @@
+name: TradingView public catalog archive
+on:
+  push:
+    paths:
+      - ".github/workflows/tradingview-public-catalog.yml"
+  workflow_dispatch:
+jobs:
+  collect-public-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install parsers
+        run: pip install requests beautifulsoup4
+      - name: Collect unfiltered public listing and full script descriptions
+        run: |
+          python tools/tradingview_catalog_collect.py --max-pages 100 --max-details 10000 --delay 2.5 --output tradingview_catalog_output
+      - name: Upload collected raw records and coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-public-scripts-with-descriptions
+          path: tradingview_catalog_output/
+          retention-days: 30
+          if-no-files-found: warn
