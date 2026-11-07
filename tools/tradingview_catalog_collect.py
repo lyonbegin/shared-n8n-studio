@@ -50,6 +50,7 @@ def savejsonl(path,rows):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--max-pages",type=int,default=300)
+    p.add_argument("--start-page",type=int,default=1)
     p.add_argument("--delay",type=float,default=2.5)
     p.add_argument("--output",default="tradingview_catalog_output")
     a=p.parse_args();out=Path(a.output);out.mkdir(parents=True,exist_ok=True)
@@ -74,7 +75,7 @@ def main():
         except requests.RequestException as e:return None,None,str(e)
     for kind in TYPES:
         blank=0
-        for page in range(1,a.max_pages+1):
+        for page in range(a.start_page,a.start_page+a.max_pages):
             url=listurl(kind,page);code,html,error=fetch(url)
             rows=parse_listing(html,kind,page) if html else [];new=0
             for r in rows:
@@ -102,9 +103,12 @@ def main():
         w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(details)
     savejsonl(out/"listing_pages.jsonl",listpages);savejsonl(out/"errors.jsonl",errors)
     m=dict(created_at=now(),source=BASE+"/scripts/?script_type=strategies",types=TYPES,max_pages=a.max_pages,
-           discovered_unique=len(records),details_attempted=len(details),
+           start_page=a.start_page,discovered_unique=len(records),details_attempted=len(details),
            detail_descriptions=sum(bool(x["description"]) for x in details),
            listing_pages=len(listpages),errors=len(errors),blocked=blocked,
+           stopped_at_listing_page=listpages[-1]["page"] if listpages else None,
+           consecutive_empty_or_repeated_pages=blank,
+           stopped_because_no_new_pages=blank>=2,
            coverage="PARTIAL_NOT_PROVEN_COMPLETE",classification_performed=False,
            note="Strategy-only listing traversal; no keyword filters or detail-count cap. Public page limits and access failures are tracked; full coverage not asserted.")
     (out/"manifest.json").write_text(json.dumps(m,indent=2,ensure_ascii=False),encoding="utf-8")
