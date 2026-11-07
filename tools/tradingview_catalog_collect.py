@@ -12,8 +12,8 @@ def clean(s):return re.sub(r"\s+"," ",s or "").strip()
 def canonical(href):
     x=urllib.parse.urlparse(urllib.parse.urljoin(BASE,href))
     if x.netloc not in ("www.tradingview.com","tradingview.com","kr.tradingview.com"):return
-    m=re.match(r"/script/([A-Za-z0-9]{6,})/([^/?#]+)/?",x.path)
-    if m:return BASE+"/script/"+m[1]+"/"+m[2]+"/"
+    m=re.match(r"/script/([A-Za-z0-9]{6,})-([^/?#]+)/?",x.path)
+    if m:return BASE+"/script/"+m[1]+"-"+m[2]+"/"
 def listurl(kind,page):
     return BASE+("/scripts/" if page==1 else f"/scripts/page-{page}/")+("" if kind=="all" else "?script_type="+kind)
 def soupify(html):
@@ -92,8 +92,8 @@ def main():
     records=list(found.values());savejsonl(out/"listing_discovery.jsonl",records)
     details=[]
     for r in records[:a.max_details]:
-        code,html,error=fetch(r["url"]);row={**r,"script_id":r["url"].split("/")[4],
-             "slug":r["url"].split("/")[5],"title":"","author":"","description":"",
+        code,html,error=fetch(r["url"]);row={**r,"script_id":r["url"].split("/")[4].split("-",1)[0],
+             "slug":r["url"].split("/")[4].split("-",1)[1],"title":"","author":"","description":"",
              "status":code,"fetched_at":now(),"error":error}
         if html:row.update(parse_detail(html))
         if error:errors.append(dict(stage="detail",url=r["url"],error=error))
