@@ -1,0 +1,82 @@
+name: TradingView continuous Strategy and Indicator discovery
+on:
+  push:
+    paths:
+      - "tools/tradingview_continual_discovery.py"
+      - ".github/workflows/tradingview-continuous-discovery.yml"
+  workflow_dispatch:
+    inputs:
+      page_limit:
+        description: Max pages per public script feed
+        default: "200"
+        required: false
+      refresh_authors:
+        description: Previously known authors to revisit per cycle
+        default: "50"
+        required: false
+  schedule:
+    - cron: "17 3 * * *"
+concurrency:
+  group: tradingview-continuous-discovery
+  cancel-in-progress: false
+jobs:
+  continuous-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies and syntax check
+        run: |
+          pip install requests beautifulsoup4
+          python -m py_compile tools/tradingview_continual_discovery.py
+      - name: Retrieve Strategy baseline and 473-author expansion
+        run: |
+          mkdir -p source_catalog previous_authors previous_cycle
+          gh run download 42424650043 -R lyonbegin/shared-n8n-studio -n tradingview-strategy-only-pages -D source_catalog
+          gh run download 42431447503 -R lyonbegin/shared-n8n-studio -n all-authors-strategy-indicator-expansion -D previous_authors
+          test -s source_catalog/scripts_with_descriptions.jsonl
+          test -s previous_authors/all.jsonl
+      - name: Restore most recent successful continuous archive
+        run: |
+          previous_id=$(gh run list -R lyonbegin/shared-n8n-studio -w tradingview-continuous-discovery.yml --status success --limit 10 --json databaseId --jq '.[0].databaseId' || true)
+          if [ -n "$previous_id" ]; then
+            echo "PRIOR_CYCLE=$previous_id"
+            gh run download "$previous_id" -R lyonbegin/shared-n8n-studio -n tradingview-continuous-catalog -D previous_cycle || true
+          else
+            echo 'First continuous cycle; using the baseline exports.'
+          fi
+      - name: Smoke validate community listings and author response
+        run: |
+          python tools/tradingview_continual_discovery.py --mode smoke --page-limit 2 --delay 1 --output tv_continuous_smoke
+          python -c 'import json; m=json.load(open("tv_continuous_smoke/manifest.json")); assert m["unique_strategies"] >= 1185 and m["unique_indicators"] >= 2022, m'
+      - name: Expand community feed authors, refresh old authors, merge all scripts
+        env:
+          TV_PAGES: ${{ inputs.page_limit || '200' }}
+          TV_REFRESH: ${{ inputs.refresh_authors || '50' }}
+        run: |
+          python tools/tradingview_continual_discovery.py --page-limit "$TV_PAGES" --max-new-authors 5000 --refresh-authors "$TV_REFRESH" --delay 1.5 --output tradingview_continual_output
+          python -c 'import json; m=json.load(open("tradingview_continual_output/manifest.json")); assert m["unique_strategies"] >= 1185 and m["unique_indicators"] >= 2022, m'
+      - name: Upload verified cumulative Strategy and Indicator archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-continuous-catalog
+          path: tradingview_continual_output/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Upload smoke diagnostic when main archive fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-continuous-smoke-diagnostic
+          path: tv_continuous_smoke/
+          retention-days: 7
+          if-no-files-found: ignore
