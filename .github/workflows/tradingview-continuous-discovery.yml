@@ -14,8 +14,6 @@ on:
         description: Previously known authors to revisit per cycle
         default: "50"
         required: false
-  schedule:
-    - cron: "17 3 * * *"
 concurrency:
   group: tradingview-continuous-discovery
   cancel-in-progress: false
