@@ -1,0 +1,46 @@
+name: TradingView all discovered authors Strategy and Indicator expansion
+on:
+  push:
+    paths:
+      - ".github/workflows/tradingview-author-expansion.yml"
+  workflow_dispatch:
+jobs:
+  expand-profiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Download previously collected Strategy corpus
+        run: |
+          mkdir -p source_catalog
+          gh run download 42424650043 -R lyonbegin/shared-n8n-studio -n tradingview-strategy-only-pages -D source_catalog
+          test -s source_catalog/scripts_with_descriptions.jsonl
+      - name: Extract every unique author including FuturesTeller
+        run: |
+          python -c 'import json,pathlib; d={json.loads(l).get("author","").strip() for l in open("source_catalog/scripts_with_descriptions.jsonl",encoding="utf-8") if l.strip()}; d.discard(""); d.add("FuturesTeller"); pathlib.Path("all_authors.txt").write_text("\n".join(sorted(d))+"\n",encoding="utf-8"); print("SEED_AUTHORS",len(d))'
+      - name: Read every published page for all discovered authors
+        run: |
+          python tools/tradingview_author_published_collect.py --authors '' --authors-file all_authors.txt --delay 2 --output author_expansion_output
+      - name: Attach seed and baseline discovery file
+        if: always()
+        run: |
+          if [ -d author_expansion_output ]; then
+            cp all_authors.txt author_expansion_output/author_seed.txt
+            cp source_catalog/manifest.json author_expansion_output/initial_strategy_corpus_manifest.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: all-authors-strategy-indicator-expansion
+          path: author_expansion_output/
+          retention-days: 30
+          if-no-files-found: warn
