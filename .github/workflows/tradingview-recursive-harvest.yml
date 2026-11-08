@@ -51,12 +51,18 @@ jobs:
           found, pages = listing_scan(session, "editors-picks", 2, 1, errors)
           assert len(found) >= 24, (len(found), pages, errors)
           assert any(x.get("author") and x.get("type") in ("strategy","indicator") for x in found), found[:2]
+          # A bounded 2-page smoke test MUST report pagination_limit as incomplete.
+          assert len(errors) == 1 and errors[0].get("stage") == "pagination_limit", errors
+          errors.clear()
           followed, follow_pages = listing_scan(session, "followed-authors", 1, 1, errors)
           assert not errors, errors
           assert followed or any(x.get("status") == "requires_authentication" for x in follow_pages), follow_pages
           for slug in ("xauusd", "indicators", "strategy", "zigzag"):
               topic_found, topic_pages = listing_scan(session, "topic:" + slug, 1, 1, errors)
               assert topic_found and any(x.get("author") for x in topic_found), (slug, topic_pages, errors)
+              # This probe intentionally stops at page 1; it must not claim an end.
+              assert len(errors) == 1 and errors[0].get("stage") == "pagination_limit", errors
+              errors.clear()
               print("TOPIC_TEST_OK", slug, len(topic_found), flush=True)
           assert not errors, errors
           print("SOURCE_TEST_OK", len(found), len(followed), follow_pages, flush=True)
