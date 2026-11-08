@@ -1,5 +1,9 @@
 name: TradingView recursive Strategy Indicator one-shot crawl
 on:
+  push:
+    paths:
+      - "tools/tradingview_recursive_harvest.py"
+      - ".github/workflows/tradingview-recursive-harvest.yml"
   workflow_dispatch:
 concurrency:
   group: tradingview-recursive-once
@@ -22,21 +26,35 @@ jobs:
         run: |
           pip install requests beautifulsoup4
           python -m py_compile tools/tradingview_continual_discovery.py tools/tradingview_recursive_harvest.py
-      - name: Restore 834 detail baseline, 473 author archive, and latest 11000 script master
+      - name: Restore prior Strategy, Indicator and all verified author coverage
         run: |
-          mkdir -p source_catalog previous_authors previous_cycle
+          mkdir -p source_catalog previous_authors previous_recursive
           gh run download 42424650043 -R lyonbegin/shared-n8n-studio -n tradingview-strategy-only-pages -D source_catalog
           gh run download 42431447503 -R lyonbegin/shared-n8n-studio -n all-authors-strategy-indicator-expansion -D previous_authors
-          gh run download 42434951397 -R lyonbegin/shared-n8n-studio -n tradingview-continuous-catalog -D previous_cycle
-          test -s previous_cycle/master.jsonl
+          gh run download 42438268604 -R lyonbegin/shared-n8n-studio -n tradingview-recursive-final-or-checkpoint -D previous_recursive
+          test -s previous_recursive/master.jsonl
+          test -s previous_recursive/author_coverage.jsonl
           test -s previous_authors/all.jsonl
-      - name: Test recursive crawling on a small real author sample
+      - name: Live validate Editors Picks, Followed Authors, and id parsing
         run: |
-          python tools/tradingview_recursive_harvest.py --skip-feeds --test-authors 3 --delay 1 --output sample_check || test $? -eq 1
-          python -c 'import json; m=json.load(open("sample_check/manifest.json")); assert m["authors_processed"] >= 3 and m["strategies"] >= 1711 and m["indicators"] >= 9289, m'
+          python - <<'PY'
+          import requests
+          from tools.tradingview_recursive_harvest import listing_scan, script_id
+          assert script_id("https://www.tradingview.com/script/ERScIMjp/") == "ERScIMjp"
+          assert script_id("https://www.tradingview.com/script/u1L7iXmp-title/") == "u1L7iXmp"
+          session = requests.Session()
+          errors = []
+          found, pages = listing_scan(session, "editors-picks", 2, 1, errors)
+          assert len(found) >= 24, (len(found), pages, errors)
+          assert any(x.get("author") and x.get("type") in ("strategy","indicator") for x in found), found[:2]
+          followed, follow_pages = listing_scan(session, "followed-authors", 1, 1, errors)
+          assert not errors, errors
+          assert followed or any(x.get("status") == "requires_authentication" for x in follow_pages), follow_pages
+          print("SOURCE_TEST_OK", len(found), len(followed), follow_pages, flush=True)
+          PY
       - name: Crawl all discovered authors recursively until queue is empty
         run: |
-          python tools/tradingview_recursive_harvest.py --page-limit 200 --delay 1.3 --checkpoint-every 25 --max-runtime 18500 --output tradingview_recursive_output
+          python tools/tradingview_recursive_harvest.py --latest previous_recursive/master.jsonl --processed-authors-file previous_recursive/author_coverage.jsonl --page-limit 200 --delay 1.3 --checkpoint-every 25 --max-runtime 18500 --output tradingview_recursive_output
       - name: Upload cumulative catalog, checkpoint, and validation
         if: always()
         uses: actions/upload-artifact@v4
