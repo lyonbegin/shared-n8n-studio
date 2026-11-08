@@ -24,6 +24,13 @@ targets=[
  "/scripts/zigzag/",
  "/scripts/weeklypivots/",
  "/scripts/editors-picks/",
+ "/scripts/xauusd/page-2/",
+ "/scripts/xauusd/page-3/",
+ "/scripts/indicators/page-2/",
+ "/scripts/strategy/page-2/",
+ "/scripts/zigzag/page-2/",
+ "/scripts/weeklypivots/page-2/",
+ "/scripts/ionqstock/page-2/",
  "/scripts/followed-authors/",
 ]
 s=requests.Session()
@@ -42,7 +49,8 @@ for path in targets:
    badge=article.select_one('[class*="badge"] [class*="content"]')
    author=article.select_one('address a[href*="/u/"]')
    detail.append({"article_classes":article.get("class"),"has_title_selector":bool(a),"title":a.get_text(" ",strip=True)[:80] if a else None,"url":a.get("href") if a else None,"badge":badge.get_text(" ",strip=True)[:80] if badge else None,"author":author.get("href") if author else None,"text_head":article.get_text(" ",strip=True)[:130]})
-  o={"source":path,"final_url":r.url,"status":r.status_code,"articles":len(articles),"script_anchors":len(html_links),"author_anchors":len(author_links),"canonical":soup.find("link",rel="canonical").get("href") if soup.find("link",rel="canonical") else None,"cards":detail,"first_link":[{"href":a.get("href"),"text":a.get_text(" ",strip=True)[:60]} for a in html_links[:4]]}
+  pagination_links=list(dict.fromkeys(a.get("href") for a in soup.select('a[href*="/page-"]') if a.get("href")))
+  o={"source":path,"pagination_links":pagination_links[:20],"all_pagination_link_count":len(pagination_links),"first_script":html_links[0].get("href") if html_links else None,"last_script":html_links[-1].get("href") if html_links else None,"final_url":r.url,"status":r.status_code,"articles":len(articles),"script_anchors":len(html_links),"author_anchors":len(author_links),"canonical":soup.find("link",rel="canonical").get("href") if soup.find("link",rel="canonical") else None,"cards":detail,"first_link":[{"href":a.get("href"),"text":a.get_text(" ",strip=True)[:60]} for a in html_links[:4]]}
  except Exception as e:o={"source":path,"error":repr(e)}
  summary.append(o)
  print("PROBE",json.dumps(o,ensure_ascii=False),flush=True)
