@@ -1,0 +1,27 @@
+from playwright.sync_api import sync_playwright
+from urllib.parse import urlparse
+import time,re,json
+u="https://www.tradingview.com/u/FuturesTeller/#published-scripts"
+with sync_playwright() as p:
+ b=p.chromium.launch(headless=True,args=["--no-sandbox"])
+ page=b.new_page(locale="en-US",viewport={"width":1280,"height":900})
+ calls=[]
+ def log(req):
+  x=req.url
+  if any(t in x for t in ("FuturesTeller","scripts","publication","profile","user/")):
+   if len(calls)<80:calls.append((req.method,x[:320]))
+ page.on("request",log)
+ try:
+  page.goto(u,wait_until="domcontentloaded",timeout=45000)
+  page.wait_for_timeout(5000)
+  print("TITLE",page.title(),"CURRENT_URL",page.url)
+  print("TABS",[(x.get_attribute("href"), x.inner_text()[:80]) for x in page.locator('a[href*="script"]').all()[:15]])
+  print("SCRIPT_LINKS",page.locator('a[href*="/script/"]').count())
+  print("PAGE_TEXT",page.locator("main").first.inner_text()[:1800] if page.locator("main").count() else page.locator("body").inner_text()[:1800])
+  for i in range(3):
+   page.mouse.wheel(0,2500);page.wait_for_timeout(1200)
+  print("AFTER_SCROLL_LINKS",page.locator('a[href*="/script/"]').count())
+  print("REQUESTS",json.dumps(calls[-45:],ensure_ascii=False))
+  page.screenshot(path="profile_screenshot.png",full_page=False)
+ except Exception as e:print("ERROR",repr(e))
+ finally:b.close()
