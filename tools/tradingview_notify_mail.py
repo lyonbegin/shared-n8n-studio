@@ -27,7 +27,7 @@ msg.set_content(
   f"오류 {m['error_count']}건, 남은 제작자 대기열 0명\n"
   f"GitHub Actions: https://github.com/lyonbegin/shared-n8n-studio/actions/runs/{os.getenv('GITHUB_RUN_ID','')}\n"
   "단, 공개 사이트 전체 개수와 일치함을 증명하는 것은 아닙니다.\n")
-port=int(os.getenv("TV_SMTP_PORT","465"))
+port=int(os.getenv("TV_SMTP_PORT") or "465")
 if port==465:
  with smtplib.SMTP_SSL(os.environ["TV_SMTP_HOST"],port,context=ssl.create_default_context(),timeout=30) as smtp:
   smtp.login(os.environ["TV_SMTP_USER"],os.environ["TV_SMTP_PASSWORD"])
