@@ -1,0 +1,30 @@
+name: TradingView author published Strategy and Indicator crawl
+on:
+  push:
+    paths:
+      - "tools/tradingview_author_published_collect.py"
+      - ".github/workflows/tradingview-author-published-collect.yml"
+  workflow_dispatch:
+jobs:
+  test-futuresteller:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Collect all FuturesTeller profile publications and verify types/count
+        run: |
+          python tools/tradingview_author_published_collect.py --authors FuturesTeller --output tv_author_out
+          python -c "import json; m=json.load(open('tv_author_out/manifest.json')); print(m); assert m['authors_covered']==1 and m['total_unique']==18 and m['strategies']==10 and m['indicators']==1 and m['libraries_for_reference']==7"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: futures-teller-strategies-indicators
+          path: tv_author_out/
+          retention-days: 30
+          if-no-files-found: warn
