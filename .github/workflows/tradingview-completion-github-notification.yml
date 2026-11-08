@@ -1,0 +1,31 @@
+name: TradingView crawl finished GitHub native notification
+on:
+  workflow_run:
+    workflows:
+      - "TradingView recursive Strategy Indicator one-shot crawl"
+    types:
+      - completed
+permissions:
+  actions: read
+  issues: write
+  contents: read
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Read recursive harvest artifact
+        env:
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          mkdir -p recursive_result
+          gh run download "$SOURCE_RUN_ID" -R "$GH_REPO" -n tradingview-recursive-final-or-checkpoint -D recursive_result || true
+      - name: Notify owner via GitHub assigned issue
+        run: python tools/tradingview_github_notification.py
