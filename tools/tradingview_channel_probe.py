@@ -6,10 +6,25 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 BASE="https://www.tradingview.com"
 targets=[
+ "/scripts/xauusd/",
+ "/scripts/indicators/",
+ "/scripts/scalp/",
+ "/scripts/pinescript/",
+ "/scripts/heatmap/",
+ "/scripts/gold/",
+ "/scripts/strategy/",
+ "/scripts/smart-money-concepts/",
+ "/scripts/reversal/",
+ "/scripts/vwap/",
+ "/scripts/supertrend/",
+ "/scripts/scalping/",
+ "/scripts/nq1!/",
+ "/scripts/ionqstock/",
+ "/scripts/elliottwaves/",
+ "/scripts/zigzag/",
+ "/scripts/weeklypivots/",
  "/scripts/editors-picks/",
- "/scripts/editors-picks/page-2/",
  "/scripts/followed-authors/",
- "/scripts/followed-authors/page-2/",
 ]
 s=requests.Session()
 s.headers.update({"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36","Accept-Language":"en-US,en;q=0.9"})
