@@ -197,6 +197,7 @@ def main():
     p.add_argument("--latest-manifest", default="previous_cycle/author_coverage.jsonl")
     p.add_argument("--page-limit", type=int, default=200)
     p.add_argument("--max-new-authors", type=int, default=5000)
+    p.add_argument("--refresh-authors", type=int, default=50)
     p.add_argument("--delay", type=float, default=1.4)
     p.add_argument("--mode", choices=["smoke", "full"], default="full")
     p.add_argument("--output", default="tradingview_continual_output")
@@ -234,8 +235,14 @@ def main():
     candidates = sorted(discovered_authors - existing_authors)
     if a.mode == "smoke":
         candidates = candidates[:3]
+        refresh = []
     else:
         candidates = candidates[:a.max_new_authors]
+        old_authors = sorted(existing_authors)
+        count = min(len(old_authors), max(0, a.refresh_authors))
+        offset = ((dt.datetime.now(dt.timezone.utc).date() - dt.date(2026, 1, 1)).days * max(1,count)) % max(1,len(old_authors))
+        refresh = [old_authors[(offset + i) % len(old_authors)] for i in range(count)]
+    candidates = list(dict.fromkeys(candidates + refresh))
     print("DISCOVERED_AUTHORS", len(discovered_authors), "OLD_AUTHORS", len(existing_authors),
           "NEW_AUTHORS_IN_BATCH", len(candidates), flush=True)
     for item in public_feed:
@@ -282,6 +289,7 @@ def main():
         "new_indicator_ids": len({x["id"] for x in indicators} - old_indicators),
         "authors_newly_found_in_feed": len(discovered_authors - existing_authors),
         "authors_processed": len(profile_report),
+        "existing_authors_refreshed": len(refresh),
         "authors_complete": sum(bool(x.get("complete")) for x in profile_report),
         "listing_pages_scanned": len(scanned), "errors": len(errors),
         "description_status": "previews_only_for_new_items; full details require separate fetch",
