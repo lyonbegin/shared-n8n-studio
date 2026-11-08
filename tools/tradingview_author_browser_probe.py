@@ -11,6 +11,21 @@ with sync_playwright() as p:
   if any(t in x for t in ("FuturesTeller","scripts","publication","profile","user/")):
    if len(calls)<80:calls.append((req.method,x[:320]))
  page.on("request",log)
+ def on_response(response):
+  if "/api/v1/scripts/" in response.url:
+   try:
+    data=response.json()
+    print("API_STATUS",response.status,"API_TYPE",type(data).__name__,flush=True)
+    if isinstance(data,dict):
+     print("API_TOP_KEYS",list(data.keys()),flush=True)
+     for key,val in data.items():
+      if isinstance(val,list):
+       print("API_ARRAY",key,"len",len(val),"first",json.dumps(val[0] if val else {},ensure_ascii=False)[:4500],flush=True)
+      elif isinstance(val,dict): print("API_DICT",key,"keys",list(val.keys()),flush=True)
+      else: print("API_FIELD",key,str(val)[:300],flush=True)
+    elif isinstance(data,list):print("API_ITEMS",len(data),"first",json.dumps(data[0] if data else {},ensure_ascii=False)[:4500],flush=True)
+   except Exception as e:print("API_ERR",repr(e),flush=True)
+ page.on("response",on_response)
  try:
   page.goto(u,wait_until="domcontentloaded",timeout=45000)
   page.wait_for_timeout(5000)
