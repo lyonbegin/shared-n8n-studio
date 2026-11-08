@@ -31,7 +31,7 @@ jobs:
           mkdir -p source_catalog previous_authors previous_recursive
           gh run download 42424650043 -R lyonbegin/shared-n8n-studio -n tradingview-strategy-only-pages -D source_catalog
           gh run download 42431447503 -R lyonbegin/shared-n8n-studio -n all-authors-strategy-indicator-expansion -D previous_authors
-          gh run download 42438268604 -R lyonbegin/shared-n8n-studio -n tradingview-recursive-final-or-checkpoint -D previous_recursive
+          gh run download 42443014922 -R lyonbegin/shared-n8n-studio -n tradingview-recursive-final-or-checkpoint -D previous_recursive
           test -s previous_recursive/master.jsonl
           test -s previous_recursive/author_coverage.jsonl
           test -s previous_authors/all.jsonl
@@ -39,7 +39,8 @@ jobs:
         run: |
           python - <<'PY'
           import requests
-          from tools.tradingview_recursive_harvest import listing_scan, script_id
+          from tools.tradingview_recursive_harvest import listing_scan, script_id, TOPIC_PATHS
+          assert len(TOPIC_PATHS) == 17, TOPIC_PATHS
           assert script_id("https://www.tradingview.com/script/ERScIMjp/") == "ERScIMjp"
           assert script_id("https://www.tradingview.com/script/u1L7iXmp-title/") == "u1L7iXmp"
           session = requests.Session()
@@ -50,6 +51,11 @@ jobs:
           followed, follow_pages = listing_scan(session, "followed-authors", 1, 1, errors)
           assert not errors, errors
           assert followed or any(x.get("status") == "requires_authentication" for x in follow_pages), follow_pages
+          for slug in ("xauusd", "indicators", "strategy", "zigzag"):
+              topic_found, topic_pages = listing_scan(session, "topic:" + slug, 1, 1, errors)
+              assert topic_found and any(x.get("author") for x in topic_found), (slug, topic_pages, errors)
+              print("TOPIC_TEST_OK", slug, len(topic_found), flush=True)
+          assert not errors, errors
           print("SOURCE_TEST_OK", len(found), len(followed), follow_pages, flush=True)
           PY
       - name: Crawl all discovered authors recursively until queue is empty
