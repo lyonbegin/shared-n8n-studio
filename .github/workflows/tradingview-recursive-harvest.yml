@@ -1,9 +1,5 @@
 name: TradingView recursive Strategy Indicator one-shot crawl
 on:
-  push:
-    paths:
-      - "tools/tradingview_recursive_harvest.py"
-      - ".github/workflows/tradingview-recursive-harvest.yml"
   workflow_dispatch:
 concurrency:
   group: tradingview-recursive-once
@@ -15,7 +11,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      issues: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -26,7 +21,7 @@ jobs:
       - name: Dependencies and compilation
         run: |
           pip install requests beautifulsoup4
-          python -m py_compile tools/tradingview_continual_discovery.py tools/tradingview_recursive_harvest.py tools/tradingview_notify_mail.py
+          python -m py_compile tools/tradingview_continual_discovery.py tools/tradingview_recursive_harvest.py
       - name: Restore 834 detail baseline, 473 author archive, and latest 11000 script master
         run: |
           mkdir -p source_catalog previous_authors previous_cycle
@@ -50,35 +45,3 @@ jobs:
           path: tradingview_recursive_output/
           retention-days: 90
           if-no-files-found: warn
-      - name: Send completed-recursion email if SMTP secrets configured
-        if: always()
-        env:
-          TV_MANIFEST: tradingview_recursive_output/manifest.json
-          TV_SMTP_HOST: ${{ secrets.TV_SMTP_HOST }}
-          TV_SMTP_PORT: ${{ secrets.TV_SMTP_PORT }}
-          TV_SMTP_USER: ${{ secrets.TV_SMTP_USER }}
-          TV_SMTP_PASSWORD: ${{ secrets.TV_SMTP_PASSWORD }}
-          TV_REPORT_EMAIL: ${{ secrets.TV_REPORT_EMAIL }}
-        run: python tools/tradingview_notify_mail.py
-      - name: Create GitHub notification if email is not configured
-        if: always()
-        env:
-          SMTP_HOST: ${{ secrets.TV_SMTP_HOST }}
-          SMTP_USER: ${{ secrets.TV_SMTP_USER }}
-          SMTP_PASS: ${{ secrets.TV_SMTP_PASSWORD }}
-          SMTP_TO: ${{ secrets.TV_REPORT_EMAIL }}
-        run: |
-          python - <<'PY'
-          import json,os,pathlib,subprocess
-          p=pathlib.Path("tradingview_recursive_output/manifest.json")
-          if not p.exists():raise SystemExit(0)
-          m=json.loads(p.read_text(encoding="utf-8"))
-          if m["state"]!="FRONTIER_EXHAUSTED":raise SystemExit(0)
-          if all(os.getenv(k) for k in ("SMTP_HOST","SMTP_USER","SMTP_PASS","SMTP_TO")):raise SystemExit(0)
-          title=f"[TradingView] 재귀 수집 종료: Strategy {m['strategies']} / Indicator {m['indicators']}"
-          body=(f"신규 제작자 대기열 종료. Strategy {m['strategies']}, Indicator {m['indicators']}, 오류 {m['error_count']}.\n"
-                f"Actions: https://github.com/lyonbegin/shared-n8n-studio/actions/runs/{os.getenv('GITHUB_RUN_ID')}\n"
-                "SMTP secrets not configured, so email could not be sent; GitHub assignment notification is a fallback.\n")
-          subprocess.run(["gh","issue","create","-R","lyonbegin/shared-n8n-studio","-t",title,"-b","".join(body),"-a","lyonbegin"],check=True)
-          print("GITHUB_ISSUE_NOTIFICATION_CREATED; DIRECT_EMAIL_NOT_CONFIGURED")
-          PY
