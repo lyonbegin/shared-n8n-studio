@@ -10,6 +10,7 @@ import argparse
 import csv
 import datetime as dt
 import json
+import itertools
 import re
 import time
 import urllib.parse
@@ -100,8 +101,19 @@ def fetch(session, url, delay, params=None):
 def listing_scan(session, category, page_limit, delay, errors):
     discovered = {}
     scanned = []
-    repeated = 0
-    for page in range(1, page_limit + 1):
+    previous_page_signature = None
+    # There is no 200-page silent cutoff: advance until TradingView proves
+    # the listing has ended (redirect, 404, or an actually empty next page).
+    for page in itertools.count(1):
+        if page > 10000:
+            errors.append({"stage":"pagination_safety","category":category,"page":page,
+                           "error":"10000 pages reached without confirmed end"})
+            break
+        if page_limit and page > page_limit:
+            errors.append({"stage":"pagination_limit","category":category,"page":page,
+                           "error":"User page limit reached before confirmed end"})
+            print("LIST_LIMIT_INCOMPLETE", category, page, flush=True)
+            break
         if category.startswith("topic:"):
             slug = category.split(":", 1)[1]
             if slug not in TOPIC_PATHS:
@@ -126,19 +138,28 @@ def listing_scan(session, category, page_limit, delay, errors):
                                 "final_url": response.url, "new_ids": 0})
                 print("CHANNEL_LOGIN_REQUIRED", category, response.url, flush=True)
                 break
-            if category == "editors-picks" and not final_path.startswith("/scripts/editors-picks/"):
-                raise RuntimeError("Editors Picks redirected unexpectedly to " + response.url)
-            if category.startswith("topic:"):
-                slug = category.split(":", 1)[1]
-                required = "/scripts/" + slug + "/"
-                if not urllib.parse.unquote(final_path).lower().startswith(required.lower()):
-                    raise RuntimeError("Topic page redirected unexpectedly: " + response.url)
+            expected_path = urllib.parse.unquote(path)
+            final_decoded_path = urllib.parse.unquote(final_path)
+            if final_decoded_path != expected_path:
+                # TradingView clamps out-of-range /page-N/ URLs back to the
+                # actual final page or the category root. This is the verified
+                # end condition, NOT a card count or a 200-page cutoff.
+                if page > 1 and final_decoded_path.startswith(
+                        expected_path.split("/page-")[0] + "/"):
+                    scanned.append({"category":category,"page":page,"new_ids":0,
+                                    "status":"end_redirect",
+                                    "requested_url":url,"final_url":response.url})
+                    print("LIST_END_REDIRECT", category, page, response.url, flush=True)
+                    break
+                raise RuntimeError("Unexpected listing redirect: " + url + " -> " + response.url)
             soup = BeautifulSoup(response.text, "html.parser")
-            if category.startswith("topic:") and page == 1 and not soup.select("article"):
-                scanned.append({"category":category, "page":page, "new_ids":0, "status":"empty_topic"})
-                print("TOPIC_EMPTY", category, response.url, flush=True)
+            if not soup.select("article"):
+                scanned.append({"category":category,"page":page,"new_ids":0,
+                                "status":"empty_topic" if page == 1 else "end_empty"})
+                print("LIST_END_EMPTY", category, page, flush=True)
                 break
             new = 0
+            page_ids = set()
             for article in soup.select("article"):
                 a = article.select_one('a[data-qa-id="ui-lib-card-link-title"][href*="/script/"]')
                 if not a:
@@ -147,6 +168,7 @@ def listing_scan(session, category, page_limit, delay, errors):
                 sid = script_id(uri)
                 if not sid:
                     continue
+                page_ids.add(sid)
                 # The badge is the site's actual published type. Do not infer type from title.
                 badge = article.select_one('[class*="badge"] [class*="content"]')
                 typ = normalized_type(badge.get_text(" ", strip=True) if badge else "")
@@ -167,11 +189,15 @@ def listing_scan(session, category, page_limit, delay, errors):
                 if sid not in discovered:
                     discovered[sid] = item
                     new += 1
-            scanned.append({"category": category, "page": page, "new_ids": new})
+            if not page_ids:
+                raise RuntimeError("Articles present but no script IDs parsed: " + url)
+            signature = tuple(sorted(page_ids))
+            if signature == previous_page_signature:
+                raise RuntimeError("Identical consecutive pages without redirect; pagination unverified: " + url)
+            previous_page_signature = signature
+            scanned.append({"category":category,"page":page,"new_ids":new,
+                            "status":"page_collected","cards":len(page_ids)})
             print("LIST", category, page, "new", new, "total", len(discovered), flush=True)
-            repeated = repeated + 1 if new == 0 else 0
-            if repeated >= 2:
-                break
         except requests.HTTPError as exc:
             if page > 1 and exc.response is not None and exc.response.status_code == 404:
                 scanned.append({"category": category, "page": page, "status": "end_404", "new_ids": 0})
@@ -307,6 +333,11 @@ def recursive_run(args,session=None):
         for kind in ("strategies","indicators","all","editors-picks","followed-authors", *(("topic:" + slug) for slug in TOPIC_PATHS)):
             found,pages=listing_scan(session,kind,args.page_limit,args.delay,errors)
             feed_pages.extend(pages)
+            verified_ends = {"end_redirect","end_404","end_empty","empty_topic","requires_authentication"}
+            if not any(p.get("status") in verified_ends for p in pages):
+                errors.append({"stage":"pagination_end","category":kind,
+                               "error":"No verified last page; do not claim complete"})
+                print("LIST_END_NOT_VERIFIED", kind, flush=True)
             for item in found:
                 sid=item.get("id")
                 if sid and item.get("type") in KINDS:
@@ -370,8 +401,11 @@ def recursive_run(args,session=None):
       "followed_authors_requires_login":any(x.get("status")=="requires_authentication" for x in feed_pages),
       "source_channels":sorted({x.get("category") for x in feed_pages}),
       "topics_requested":list(TOPIC_PATHS),
-      "topic_page_counts":{slug:sum(x.get("category") == "topic:" + slug for x in feed_pages)
-                           for slug in TOPIC_PATHS},
+      "topic_page_counts":{slug:sum(x.get("category") == "topic:" + slug and x.get("status") == "page_collected"
+                                        for x in feed_pages) for slug in TOPIC_PATHS},
+      "topic_end_status":{slug:next((x.get("status") for x in reversed(feed_pages)
+                                    if x.get("category") == "topic:" + slug and x.get("status") != "page_collected"),
+                                    "NOT_VERIFIED") for slug in TOPIC_PATHS},
       "descriptions":"List previews only for newly found items; full descriptions not fetched",
       "notification":"GitHub native workflow_run completion issue notification"
     }
@@ -393,7 +427,7 @@ def main():
     p.add_argument("--baseline",default="source_catalog/scripts_with_descriptions.jsonl")
     p.add_argument("--author-baseline",default="previous_authors/all.jsonl")
     p.add_argument("--latest",default="previous_cycle/master.jsonl")
-    p.add_argument("--page-limit",type=int,default=200)
+    p.add_argument("--page-limit",type=int,default=0)
     p.add_argument("--processed-authors-file",default="previous_recursive/author_coverage.jsonl")
     p.add_argument("--delay",type=float,default=1.5)
     p.add_argument("--checkpoint-every",type=int,default=50)

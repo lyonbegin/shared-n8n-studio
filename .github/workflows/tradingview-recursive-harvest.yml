@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 concurrency:
   group: tradingview-recursive-once
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   recursive-harvest:
     runs-on: ubuntu-latest
@@ -31,7 +31,10 @@ jobs:
           mkdir -p source_catalog previous_authors previous_recursive
           gh run download 42424650043 -R lyonbegin/shared-n8n-studio -n tradingview-strategy-only-pages -D source_catalog
           gh run download 42431447503 -R lyonbegin/shared-n8n-studio -n all-authors-strategy-indicator-expansion -D previous_authors
-          gh run download 42443014922 -R lyonbegin/shared-n8n-studio -n tradingview-recursive-final-or-checkpoint -D previous_recursive
+          LAST_COMPLETED=$(gh run list --workflow tradingview-recursive-harvest.yml --status success --limit 10 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$LAST_COMPLETED" ]; then echo 'No successful previous recursive run' >&2; exit 1; fi
+          echo "Restoring successful recursive run $LAST_COMPLETED"
+          gh run download "$LAST_COMPLETED" -R lyonbegin/shared-n8n-studio -n tradingview-recursive-final-or-checkpoint -D previous_recursive
           test -s previous_recursive/master.jsonl
           test -s previous_recursive/author_coverage.jsonl
           test -s previous_authors/all.jsonl
@@ -60,7 +63,7 @@ jobs:
           PY
       - name: Crawl all discovered authors recursively until queue is empty
         run: |
-          python tools/tradingview_recursive_harvest.py --latest previous_recursive/master.jsonl --processed-authors-file previous_recursive/author_coverage.jsonl --page-limit 200 --delay 1.3 --checkpoint-every 25 --max-runtime 18500 --output tradingview_recursive_output
+          python tools/tradingview_recursive_harvest.py --latest previous_recursive/master.jsonl --processed-authors-file previous_recursive/author_coverage.jsonl --page-limit 0 --delay 1.3 --checkpoint-every 25 --max-runtime 18500 --output tradingview_recursive_output
       - name: Upload cumulative catalog, checkpoint, and validation
         if: always()
         uses: actions/upload-artifact@v4
