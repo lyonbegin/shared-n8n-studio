@@ -1,0 +1,24 @@
+name: TradingView extra discovery channels probe
+on:
+  push:
+    paths:
+      - "tools/tradingview_channel_probe.py"
+      - ".github/workflows/tradingview-extra-channels-probe.yml"
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests beautifulsoup4
+      - name: Probe editors picks and followed authors
+        run: python tools/tradingview_channel_probe.py
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-extra-channels-probe
+          path: tradingview_channel_probe.json
+          retention-days: 7
