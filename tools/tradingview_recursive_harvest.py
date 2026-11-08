@@ -135,7 +135,9 @@ def listing_scan(session, category, page_limit, delay, errors):
                     raise RuntimeError("Topic page redirected unexpectedly: " + response.url)
             soup = BeautifulSoup(response.text, "html.parser")
             if category.startswith("topic:") and page == 1 and not soup.select("article"):
-                raise RuntimeError("Topic page has no script cards: " + response.url)
+                scanned.append({"category":category, "page":page, "new_ids":0, "status":"empty_topic"})
+                print("TOPIC_EMPTY", category, response.url, flush=True)
+                break
             new = 0
             for article in soup.select("article"):
                 a = article.select_one('a[data-qa-id="ui-lib-card-link-title"][href*="/script/"]')

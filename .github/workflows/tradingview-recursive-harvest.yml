@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 concurrency:
   group: tradingview-recursive-once
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   recursive-harvest:
     runs-on: ubuntu-latest
