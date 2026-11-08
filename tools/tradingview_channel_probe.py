@@ -69,3 +69,16 @@ for path in targets:
  summary.append(o)
  print("PROBE",json.dumps(o,ensure_ascii=False),flush=True)
 open("tradingview_channel_probe.json","w",encoding="utf-8").write(json.dumps(summary,ensure_ascii=False,indent=2))
+
+# Real pagination end-state smoke tests against the live public site.
+# Running these independently does not cancel the ongoing 17-topic full crawl.
+from tradingview_recursive_harvest import listing_scan
+for slug in ("weeklypivots", "ionqstock", "zigzag", "xauusd"):
+ errors = []
+ found, pages = listing_scan(s, "topic:" + slug, 0, 0.8, errors)
+ endings = [p for p in pages if p.get("status") in ("end_redirect","end_404","end_empty","empty_topic")]
+ assert endings and not errors, (slug, len(found), pages[-3:], errors)
+ assert slug != "ionqstock" or len(found) == 0, (slug, len(found))
+ assert slug not in ("zigzag","xauusd") or len(pages) >= 8, (slug, len(pages))
+ print("PAGE_END_SMOKE", slug, "pages", len(pages), "unique_scripts", len(found),
+       "end", endings[-1]["status"], "end_requested_page", endings[-1]["page"], flush=True)
