@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 
 HOST = "https://www.tradingview.com"
 KINDS = ("strategy", "indicator")
-ID_PATTERN = re.compile(r"/script/([a-zA-Z0-9]{8})-")
+ID_PATTERN = re.compile(r"/script/([a-zA-Z0-9]{8})(?:[-/?#]|$)")
 DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; StockAutomationCatalog/2.0)",
                    "Accept-Language": "en-US,en;q=0.9"}
 
@@ -98,12 +98,27 @@ def listing_scan(session, category, page_limit, delay, errors):
     scanned = []
     repeated = 0
     for page in range(1, page_limit + 1):
-        path = "/scripts/" if page == 1 else "/scripts/page-%d/" % page
+        if category in ("editors-picks", "followed-authors"):
+            path = "/scripts/%s/" % category if page == 1 else "/scripts/%s/page-%d/" % (category, page)
+            params = None
+        else:
+            path = "/scripts/" if page == 1 else "/scripts/page-%d/" % page
+            params = {"script_type": category} if category != "all" else None
         url = HOST + path
-        params = {"script_type": category} if category != "all" else None
         try:
-            html = fetch(session, url, delay, params=params).text
-            soup = BeautifulSoup(html, "html.parser")
+            response = fetch(session, url, delay, params=params)
+            # 'followed-authors' is personalized. Anonymous users are redirected
+            # to /accounts/signin/; never mislabel the login page or a redirected
+            # editors-picks page as followed authors content.
+            final_path = urllib.parse.urlparse(response.url).path
+            if category == "followed-authors" and not final_path.startswith("/scripts/followed-authors/"):
+                scanned.append({"category": category, "page": page, "status": "requires_authentication",
+                                "final_url": response.url, "new_ids": 0})
+                print("CHANNEL_LOGIN_REQUIRED", category, response.url, flush=True)
+                break
+            if category == "editors-picks" and not final_path.startswith("/scripts/editors-picks/"):
+                raise RuntimeError("Editors Picks redirected unexpectedly to " + response.url)
+            soup = BeautifulSoup(response.text, "html.parser")
             new = 0
             for article in soup.select("article"):
                 a = article.select_one('a[data-qa-id="ui-lib-card-link-title"][href*="/script/"]')
@@ -242,8 +257,11 @@ def recursive_run(args,session=None):
                 stored[sid]=merge_record(stored.get(sid),item)
     original_strategy_ids={key for key,x in stored.items() if x.get("type")=="strategy"}
     original_indicator_ids={key for key,x in stored.items() if x.get("type")=="indicator"}
-    waiting=deque();queued=set();processed=set()
-    discovered=[];reports=[];errors=[];feed_pages=[]
+    previous_reports=load_lines(Path(args.processed_authors_file))
+    processed={x["author"] for x in previous_reports if x.get("complete") is True and x.get("author")}
+    completed_at_start=len(processed)
+    waiting=deque();queued=set()
+    discovered=[];reports=list(previous_reports);errors=[];feed_pages=[]
     def enqueue(author,source):
         if not author or not _re.fullmatch(r"[A-Za-z0-9_-]{2,64}",str(author)):
             return False
@@ -259,7 +277,7 @@ def recursive_run(args,session=None):
         for name in linked_authors(item.get("description_preview"),args.mentions):
             enqueue(name,"existing_script_reference")
     if not args.skip_feeds:
-        for kind in ("strategies","indicators","all"):
+        for kind in ("strategies","indicators","all","editors-picks","followed-authors"):
             found,pages=listing_scan(session,kind,args.page_limit,args.delay,errors)
             feed_pages.extend(pages)
             for item in found:
@@ -304,7 +322,7 @@ def recursive_run(args,session=None):
             save_progress(out,stored,processed,waiting,reports,errors,discovered,feed_pages)
             done_since_checkpoint=0
             print("CHECKPOINT",len(processed),"PENDING",len(waiting),"ERRORS",len(errors),flush=True)
-        if args.test_authors and len(processed)>=args.test_authors:
+        if args.test_authors and len(processed)-completed_at_start>=args.test_authors:
             break
     records=save_progress(out,stored,processed,waiting,reports,errors,discovered,feed_pages)
     kinds=Counter(x["type"] for x in records)
@@ -317,9 +335,13 @@ def recursive_run(args,session=None):
       "strategies":kinds["strategy"],"indicators":kinds["indicator"],
       "new_strategies":len({x["id"] for x in records if x["type"]=="strategy"}-original_strategy_ids),
       "new_indicators":len({x["id"] for x in records if x["type"]=="indicator"}-original_indicator_ids),
-      "authors_processed":len(processed),"authors_discovered":len({r["author"] for r in discovered}),
+      "authors_processed":len(processed),"authors_processed_this_run":len(processed)-completed_at_start,
+      "authors_processed_from_prior_runs":completed_at_start,
+      "authors_discovered":len({r["author"] for r in discovered}),
       "pending_authors":len(waiting),"authors_failed":len({e["author"] for e in errors if e.get("stage")=="author"}),
       "error_count":len(errors),"feed_pages":len(feed_pages),
+      "followed_authors_requires_login":any(x.get("status")=="requires_authentication" for x in feed_pages),
+      "source_channels":sorted({x.get("category") for x in feed_pages}),
       "descriptions":"List previews only for newly found items; full descriptions not fetched",
       "notification":"Sent only after a clean frontier exhaustion and SMTP configuration"
     }
@@ -342,6 +364,7 @@ def main():
     p.add_argument("--author-baseline",default="previous_authors/all.jsonl")
     p.add_argument("--latest",default="previous_cycle/master.jsonl")
     p.add_argument("--page-limit",type=int,default=200)
+    p.add_argument("--processed-authors-file",default="previous_recursive/author_coverage.jsonl")
     p.add_argument("--delay",type=float,default=1.5)
     p.add_argument("--checkpoint-every",type=int,default=50)
     p.add_argument("--max-runtime",type=int,default=18000)
