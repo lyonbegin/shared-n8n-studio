@@ -1,0 +1,25 @@
+name: TradingView author Chromium probe
+on:
+  push:
+    paths:
+      - "tools/tradingview_author_browser_probe.py"
+      - ".github/workflows/tradingview-author-chromium-probe.yml"
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python tools/tradingview_author_browser_probe.py
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-author-chromium-diagnostic
+          path: profile_screenshot.png
+          if-no-files-found: ignore
