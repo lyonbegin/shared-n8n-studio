@@ -22,6 +22,10 @@ from bs4 import BeautifulSoup
 
 HOST = "https://www.tradingview.com"
 KINDS = ("strategy", "indicator")
+TOPIC_PATHS = ("xauusd", "indicators", "scalp", "pinescript", "heatmap", "gold",
+               "strategy", "smart-money-concepts", "reversal", "vwap",
+               "supertrend", "scalping", "nq1!", "ionqstock",
+               "elliottwaves", "zigzag", "weeklypivots")
 ID_PATTERN = re.compile(r"/script/([a-zA-Z0-9]{8})(?:[-/?#]|$)")
 DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; StockAutomationCatalog/2.0)",
                    "Accept-Language": "en-US,en;q=0.9"}
@@ -98,7 +102,13 @@ def listing_scan(session, category, page_limit, delay, errors):
     scanned = []
     repeated = 0
     for page in range(1, page_limit + 1):
-        if category in ("editors-picks", "followed-authors"):
+        if category.startswith("topic:"):
+            slug = category.split(":", 1)[1]
+            if slug not in TOPIC_PATHS:
+                raise ValueError("Unsupported topic: " + slug)
+            path = "/scripts/%s/" % slug if page == 1 else "/scripts/%s/page-%d/" % (slug, page)
+            params = None
+        elif category in ("editors-picks", "followed-authors"):
             path = "/scripts/%s/" % category if page == 1 else "/scripts/%s/page-%d/" % (category, page)
             params = None
         else:
@@ -118,7 +128,14 @@ def listing_scan(session, category, page_limit, delay, errors):
                 break
             if category == "editors-picks" and not final_path.startswith("/scripts/editors-picks/"):
                 raise RuntimeError("Editors Picks redirected unexpectedly to " + response.url)
+            if category.startswith("topic:"):
+                slug = category.split(":", 1)[1]
+                required = "/scripts/" + slug + "/"
+                if not urllib.parse.unquote(final_path).lower().startswith(required.lower()):
+                    raise RuntimeError("Topic page redirected unexpectedly: " + response.url)
             soup = BeautifulSoup(response.text, "html.parser")
+            if category.startswith("topic:") and page == 1 and not soup.select("article"):
+                raise RuntimeError("Topic page has no script cards: " + response.url)
             new = 0
             for article in soup.select("article"):
                 a = article.select_one('a[data-qa-id="ui-lib-card-link-title"][href*="/script/"]')
@@ -153,6 +170,14 @@ def listing_scan(session, category, page_limit, delay, errors):
             repeated = repeated + 1 if new == 0 else 0
             if repeated >= 2:
                 break
+        except requests.HTTPError as exc:
+            if page > 1 and exc.response is not None and exc.response.status_code == 404:
+                scanned.append({"category": category, "page": page, "status": "end_404", "new_ids": 0})
+                print("LIST_END_404", category, page, flush=True)
+                break
+            errors.append({"stage": "listing", "category": category, "page": page, "error": repr(exc)})
+            print("LIST_ERROR", category, page, repr(exc), flush=True)
+            break
         except Exception as exc:
             errors.append({"stage": "listing", "category": category, "page": page, "error": repr(exc)})
             print("LIST_ERROR", category, page, repr(exc), flush=True)
@@ -277,7 +302,7 @@ def recursive_run(args,session=None):
         for name in linked_authors(item.get("description_preview"),args.mentions):
             enqueue(name,"existing_script_reference")
     if not args.skip_feeds:
-        for kind in ("strategies","indicators","all","editors-picks","followed-authors"):
+        for kind in ("strategies","indicators","all","editors-picks","followed-authors", *(("topic:" + slug) for slug in TOPIC_PATHS)):
             found,pages=listing_scan(session,kind,args.page_limit,args.delay,errors)
             feed_pages.extend(pages)
             for item in found:
@@ -342,8 +367,11 @@ def recursive_run(args,session=None):
       "error_count":len(errors),"feed_pages":len(feed_pages),
       "followed_authors_requires_login":any(x.get("status")=="requires_authentication" for x in feed_pages),
       "source_channels":sorted({x.get("category") for x in feed_pages}),
+      "topics_requested":list(TOPIC_PATHS),
+      "topic_page_counts":{slug:sum(x.get("category") == "topic:" + slug for x in feed_pages)
+                           for slug in TOPIC_PATHS},
       "descriptions":"List previews only for newly found items; full descriptions not fetched",
-      "notification":"Sent only after a clean frontier exhaustion and SMTP configuration"
+      "notification":"GitHub native workflow_run completion issue notification"
     }
     (out/"manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
     (out/"README.md").write_text(
