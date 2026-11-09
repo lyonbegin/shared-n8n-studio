@@ -1,0 +1,55 @@
+name: TradingView sequential 3393 strategy published charts verification
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths:
+      - recovery/tradingview_pub_chart_3393_audit.py
+      - .github/workflows/strategy3393-published-charts.yml
+  workflow_dispatch:
+permissions: {contents: read, actions: read}
+jobs:
+  verify-publication:
+    name: Published-chart metadata shard ${{ matrix.shard }}/12
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact preserved public original source manifests
+        shell: bash
+        run: |
+          mkdir -p first_source recovered_source
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recursive-library-all-packages -D first_source
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D recovered_source
+      - name: Fetch posted TradingView chart symbol, interval, and thumbnail
+        shell: bash
+        run: |
+          python recovery/tradingview_pub_chart_3393_audit.py \
+            --sources first_source recovered_source \
+            --shard ${{ matrix.shard }} --shards 12 --workers 4 \
+            --out chart_shard_${{ matrix.shard }}
+      - name: Verify number and structure
+        run: |
+          python - <<'PY'
+          import json,glob
+          p=glob.glob('chart_shard_*/results.json')[0]
+          d=json.load(open(p))
+          assert len(d)>100,(p,len(d))
+          assert all(x['script_id']==k for k,x in d.items())
+          print('SHARD_COMPLETE',p,len(d))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tradingview-published-chart-audit-${{ matrix.shard }}
+          path: chart_shard_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
