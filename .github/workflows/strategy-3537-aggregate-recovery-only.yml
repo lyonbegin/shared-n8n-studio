@@ -1,0 +1,41 @@
+name: Strategy 3537 aggregate successful original four shards only
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - '.github/workflows/strategy-3537-aggregate-recovery-only.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Restore original 4428 catalog
+        run: |
+          mkdir -p source_4428
+          gh run download 42567572031 -R lyonbegin/shared-n8n-studio \
+            -n strategy-4428-pine-source-result -D source_4428
+      - name: Recover four verified source shard artifacts from earlier partial-failure run
+        run: |
+          for id in 0 1 2 3; do
+            mkdir -p "collected/strategy4428-recovery-shard-$id"
+            gh run download 42584299751 -R lyonbegin/shared-n8n-studio \
+              -n "strategy4428-recovery-shard-$id" \
+              -D "collected/strategy4428-recovery-shard-$id"
+            test -s "collected/strategy4428-recovery-shard-$id/status.csv"
+          done
+      - name: Exact 4428 ID audit with corrected field name
+        run: python recovery/aggregate_recovery.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-first-recovery-report-corrected-aggregation
+          path: final_recovery/
+          retention-days: 30
+          if-no-files-found: error
