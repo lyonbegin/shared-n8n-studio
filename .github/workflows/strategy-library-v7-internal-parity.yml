@@ -1,0 +1,52 @@
+name: Strategy exact Library v7 original vs generated inline parity
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths: ['.github/workflows/strategy-library-v7-internal-parity.yml']
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  parity:
+    name: Internal source versus inline Pine shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install pinned hoox-pyne
+        run: |
+          python -m venv .isolated-pyne
+          .isolated-pyne/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Wait for native Python generation to finish
+        run: |
+          gh run watch 42603292685 -R lyonbegin/shared-n8n-studio --interval 10 --exit-status
+      - name: Restore exact original source, libraries and generated inline files
+        run: |
+          mkdir -p exact_v7 native_0 native_1 native_all/strategies
+          gh run download 42603032159 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-library-v7-strict-parse-sha-verified -D exact_v7
+          gh run download 42603292685 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-native-v7-0 -D native_0
+          gh run download 42603292685 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-native-v7-1 -D native_1
+          cp -rn native_0/strategies/. native_all/strategies/ || true
+          cp -rn native_1/strategies/. native_all/strategies/ || true
+      - name: Compare original Pine with original libraries against generated inline Pine
+        run: |
+          source .isolated-pyne/bin/activate
+          python recovery/test_original_vs_inline_parity_v2.py \
+            --bundles exact_v7 --inline native_all \
+            --output parity_v7_${{ matrix.shard }} \
+            --shard ${{ matrix.shard }} --shards 2 --timeout 20
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-v7-internal-parity-${{ matrix.shard }}
+          path: parity_v7_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
