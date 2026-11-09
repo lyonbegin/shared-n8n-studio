@@ -75,7 +75,7 @@ def flatten(root):
   raise ValueError("DIRECT_IMPORTS_DONT_MATCH_MANIFEST")
  if sorted(set(refs))!=sorted(set(manifest["transitive_imports"])):
   raise ValueError("TRANSITIVE_IMPORTS_REQUIRE_RUNTIME_LINKER")
- if len(raw_imports)>2:raise ValueError("MAX_TWO_DIRECT_LIBRARIES_PER_PROOF")
+ if len(raw_imports)>16:raise ValueError("MAX_SIXTEEN_DIRECT_LIBRARIES_PER_PROOF")
  exports=[]
  code=strategy
  for match in raw_imports:
