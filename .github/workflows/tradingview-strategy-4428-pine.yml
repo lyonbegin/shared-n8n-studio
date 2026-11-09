@@ -1,0 +1,98 @@
+name: TradingView WF01 Strategy 4428 Pine source batch
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/tradingview_strategy_4428_collect.py'
+      - '.github/workflows/tradingview-strategy-4428-pine.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: strategy-4428-source-20261109
+  cancel-in-progress: false
+jobs:
+  collect-strategy-pine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate collector source syntax
+        run: |
+          python -m py_compile tools/tradingview_strategy_4428_collect.py
+      - name: Restore 2026-11-08 exact 4428 Strategy catalog from earlier GitHub Actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source_4428
+          found=0
+          while IFS= read -r runid; do
+            [ -n "$runid" ] || continue
+            rm -rf /tmp/recursive_candidate
+            mkdir -p /tmp/recursive_candidate
+            if gh run download "$runid" -R lyonbegin/shared-n8n-studio -n tradingview-recursive-final-or-checkpoint -D /tmp/recursive_candidate; then
+              CATALOG=$(find /tmp/recursive_candidate -type f -name strategies.jsonl | head -1)
+              if [ -n "$CATALOG" ]; then
+                if CATALOG="$CATALOG" python - <<'PY'
+          import json,os
+          rows=[json.loads(x) for x in open(os.environ['CATALOG'],encoding='utf-8') if x.strip()]
+          assert len(rows)==4428 and all(x.get('type')=='strategy' for x in rows)
+          assert len({x['id'] for x in rows})==4428
+          print('EXACT_4428_STRATEGY_CATALOG_VALIDATED')
+          PY
+                then
+                  cp "$CATALOG" source_4428/strategies.jsonl
+                  printf '%s\n' "$runid" > source_4428/origin_github_run.txt
+                  found=1
+                  break
+                fi
+              fi
+            fi
+          done < <(gh run list -R lyonbegin/shared-n8n-studio --workflow tradingview-recursive-harvest.yml --status success --limit 25 --json databaseId --jq '.[].databaseId')
+          if [ "$found" != 1 ]; then echo 'BLOCKED: exact 4428 snapshot not found in saved Actions artifacts' >&2; exit 1; fi
+      - name: Checkout original WF01 N11 N15 N16 Python adapter from Railway production source branch
+        run: |
+          git clone --depth 1 --branch feature/wf02-bridge-real-ddds-verified-site-20261104 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf01-native-editor
+          test -s /tmp/wf01-native-editor/n8n/editor-adapter/investment_node_adapter.py
+          test -s /tmp/wf01-native-editor/n8n/editor-adapter/verified_pine_archive.py
+      - name: Collect real Pine sources matching Strategy IDs and persist via WF01 N11 N15 N16
+        run: |
+          python tools/tradingview_strategy_4428_collect.py \
+            --catalog source_4428/strategies.jsonl \
+            --output strategy_4428_result \
+            --workers 4 \
+            --wf01-adapter /tmp/wf01-native-editor/n8n/editor-adapter
+      - name: Check that every one of the 4428 input IDs has a transparent source status
+        run: |
+          python - <<'PY'
+          import csv,json
+          from pathlib import Path
+          r=list(csv.DictReader(Path('strategy_4428_result/strategy_4428_source_status.csv').open(encoding='utf-8-sig')))
+          d=json.loads(Path('strategy_4428_result/summary.json').read_text())
+          assert len(r)==d['input_unique_strategy_ids']==4428
+          assert len({x['script_id'] for x in r})==4428
+          assert all(x['tradingview_url'] and x['source_state'] for x in r)
+          n=sum(x['source_state']=='PINE_RETRIEVED_FROM_PINNED_MIRROR' for x in r)
+          assert n==d['retrieved_source_count']
+          for x in r:
+              if x['wf01_n11_n15_n16_persisted']=='True':
+                  assert (Path('strategy_4428_result')/x['local_pine_path']).is_file()
+          print('AUDIT_PASS',len(r),'retrieved',n,'wf01_saved',d['wf01_n11_n15_n16_saved_count'])
+          PY
+      - name: Upload 4428 status and real Pine text as review-only artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy-4428-pine-source-result
+          path: |
+            strategy_4428_result/
+            source_4428/origin_github_run.txt
+          retention-days: 30
+          if-no-files-found: warn
