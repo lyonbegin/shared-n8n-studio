@@ -1,0 +1,54 @@
+name: Library native Python original versus inline internal parity verified
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/test_original_vs_inline_parity_v2.py'
+      - '.github/workflows/strategy-library-internal-parity-only.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  internal-parity:
+    name: Corrected comparison sample shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Free hoox PYNE interpret in isolated Python
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install --disable-pip-version-check 'hoox-pyne[compile]==0.6.31'
+      - name: Restore SHA-verified source bundles without re-fetching or recompiling
+        run: |
+          mkdir -p exact_library_v4 native_results/strategy-native-v4-0 native_results/strategy-native-v4-1
+          gh run download 42597216387 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-originals-transitive-libraries-v4-sha-verified -D exact_library_v4
+          gh run download 42597216387 -R lyonbegin/shared-n8n-studio \
+            -n strategy-native-v4-0 -D native_results/strategy-native-v4-0
+          gh run download 42597216387 -R lyonbegin/shared-n8n-studio \
+            -n strategy-native-v4-1 -D native_results/strategy-native-v4-1
+          mkdir -p native_all/strategies
+          cp -rn native_results/strategy-native-v4-0/strategies/. native_all/strategies/ || true
+          cp -rn native_results/strategy-native-v4-1/strategies/. native_all/strategies/ || true
+      - name: Corrected original Pine plus Library versus inlined Pine execution comparison
+        run: |
+          source .pyne-venv/bin/activate
+          python recovery/test_original_vs_inline_parity_v2.py \
+            --bundles exact_library_v4 --inline native_all \
+            --output parity_corrected_${{ matrix.shard }} \
+            --shard ${{ matrix.shard }} --shards 2 --timeout 16
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy-original-inline-internal-parity-corrected-${{ matrix.shard }}
+          path: parity_corrected_${{ matrix.shard }}/
+          if-no-files-found: warn
+          retention-days: 30
