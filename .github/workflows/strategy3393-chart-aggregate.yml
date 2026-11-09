@@ -1,0 +1,61 @@
+name: Aggregate TradingView 3393 chart verification
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths: [.github/workflows/strategy3393-chart-aggregate.yml]
+  workflow_dispatch:
+permissions: {contents: read, actions: read}
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env: {GH_TOKEN: "${{ github.token }}"}
+    steps:
+      - name: Gather twelve verified chart shards
+        shell: bash
+        run: |
+          mkdir -p source_shards
+          gh run download 42639883662 -R lyonbegin/shared-n8n-studio \
+            --pattern 'tradingview-published-chart-audit-*' -D source_shards
+      - name: Aggregate only source evidence (not thumbnails)
+        shell: bash
+        run: |
+          mkdir -p consolidated
+          python - <<'PY'
+          import json,csv,pathlib,collections
+          files=sorted(pathlib.Path('source_shards').rglob('results.json'))
+          print('RESULT_FILES',len(files))
+          assert len(files)==12,files
+          full={}
+          for p in files:
+              dat=json.loads(p.read_text())
+              for sid,info in dat.items():
+                  assert sid not in full,('DUPLICATE',sid,p)
+                  assert len(sid)==8
+                  full[sid]=info
+          assert len(full)>=3400, len(full)
+          out=pathlib.Path('consolidated')
+          (out/'published_chart_evidence_all.json').write_text(json.dumps(full,ensure_ascii=False),encoding='utf8')
+          fields=['script_id','original_url','published_ticker','published_timeframe','published_tv_type','published_exchange','ticker_title','chart_image_url','page_verified','image_downloaded','image_sha256','evidence_type','error']
+          with open(out/'published_chart_evidence_all.csv','w',encoding='utf-8-sig',newline='') as f:
+              w=csv.DictWriter(f,fields,extrasaction='ignore');w.writeheader()
+              for sid in sorted(full):
+                  w.writerow(full[sid])
+          tally=collections.Counter()
+          for x in full.values():
+              tally['all']+=1
+              tally['page_ok']+=bool(x['page_verified'])
+              tally['ticker']+=bool(x['published_ticker'])
+              tally['timeframe']+=bool(x['published_timeframe'])
+              tally['image']+=bool(x['image_downloaded'])
+              tally['ticker_and_timeframe']+=bool(x['published_ticker'] and x['published_timeframe'])
+          summ={'shard_count':len(files),'counts':dict(tally),'type_distribution':dict(collections.Counter(x.get('published_tv_type','') for x in full.values()))}
+          (out/'summary.json').write_text(json.dumps(summ,ensure_ascii=False,indent=2))
+          print(summ)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-3393-chart-aggregated
+          path: consolidated/
+          retention-days: 30
+          if-no-files-found: error
