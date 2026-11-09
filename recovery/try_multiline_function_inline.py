@@ -14,7 +14,7 @@ def parse_pure_functions(source):
  for i,line in enumerate(lines):
   if not line or line[0] in ' \t' or line.lstrip().startswith('//'):continue
   m=start_re.match(line)
-  if m and m.group(2) not in ('library','strategy','indicator'):
+  if m and m.group(2) not in ('library','strategy','indicator','plot','hline','fill','barcolor','bgcolor','plotshape','plotchar','plotbar','plotcandle','alertcondition','alert','strategy','indicator','library','table','label','line','box','polyline'):
    starts.append((i,m.group(2),bool(m.group(1))))
   elif line.startswith('export '):raise ValueError('OTHER_UNSUPPORTED_EXPORT')
  if not starts:raise ValueError('NO_FUNCTION_DECLARATIONS')
@@ -33,7 +33,9 @@ def parse_pure_functions(source):
     elif ch==')':parens-=1
    if parens<0:raise ValueError('FUNCTION_SIGNATURE_PARENTHESIS_UNBALANCED')
    if parens==0 and '=>' in chunk:end_signature=i+1;break
-  if end_signature is None:raise ValueError('MULTILINE_SIGNATURE_MISSING_ARROW')
+  if end_signature is None:
+   if exported:raise ValueError('EXPORTED_MULTILINE_SIGNATURE_MISSING_ARROW')
+   continue  # A top-level library call is not a function definition; do not inline it.
   end=end_signature
   while end<len(lines):
    s=lines[end]
