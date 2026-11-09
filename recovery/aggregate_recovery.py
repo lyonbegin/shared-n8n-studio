@@ -39,7 +39,7 @@ for r in previous:
         item={"script_id":sid,"script_title":r["script_title"],"tradingview_url":r["tradingview_url"],
           "original_access":r["original_access"],"previous_state":r["source_state"],
           "current_source_status":itemnew["recovery_state"],
-          "source_provenance":"TradingView public Pine source" if itemnew["source_sha256"] else "NONE",
+          "source_provenance":"TradingView public Pine source" if itemnew["pine_sha256"] else "NONE",
           "source_sha256":itemnew["pine_sha256"],"pine_version":itemnew["pine_version"],
           "direct_imports":itemnew["direct_imports"],
           "source_path":itemnew["source_path"],"facade_pub_id":itemnew["pub_id"],
