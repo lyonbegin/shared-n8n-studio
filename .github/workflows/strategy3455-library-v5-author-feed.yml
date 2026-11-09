@@ -1,0 +1,71 @@
+name: Strategy 3455 exact recursive Library v5 author-feed recovery
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/collect_exact_recursive_libraries_v5.py'
+      - '.github/workflows/strategy3455-library-v5-author-feed.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  exact-version-dependency-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Test exact dependency parser locally
+        run: python recovery/collect_exact_recursive_libraries_v5.py --selftest
+      - name: Restore all 3455 Strategy original Pine sources
+        run: |
+          mkdir -p source_old source_new
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recursive-library-all-packages -D source_old
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D source_new
+      - name: Reuse previous 58 SHA-verified exact Library versions
+        run: |
+          mkdir -p previous_exact
+          gh run download 42597216387 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-originals-transitive-libraries-v4-sha-verified -D previous_exact
+          test -f previous_exact/summary.json
+      - name: Discover missing library versions through public author feed, recursively follow import
+        run: |
+          python recovery/collect_exact_recursive_libraries_v5.py \
+            --old source_old --new source_new --existing previous_exact \
+            --out exact_v5
+      - name: Verify each saved Library sha256, exact per-Strategy copies and closure flags
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          root=Path('exact_v5')
+          manifests=sorted(root.glob('strategies/*/manifest.json'))
+          assert len(manifests)==86, len(manifests)
+          for path in manifests:
+            d=json.loads(path.read_text())
+            sid=d['strategy_id']
+            p=path.parent/'strategy.pine'
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==d['strategy_sha256'],sid
+            for lib in d['libraries']:
+              author,name,version=lib['ref'].split('/')
+              loc=path.parent/'libraries'/author/name/(version+'.pine')
+              assert loc.exists(), (sid,lib['ref'])
+              assert hashlib.sha256(loc.read_bytes()).hexdigest()==lib['sha256'], (sid,lib['ref'])
+            if d['status'].startswith('DEPENDENCY_COMPLETE'):
+              assert not d['missing_dependencies'],sid
+          print('VERIFIED_ORIGINAL_BYTES_LIBRARY_CLOSURES',len(manifests))
+          PY
+      - name: Upload exact version Library and per-Strategy packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy3455-exact-library-v5-author-feed-packages
+          path: exact_v5/
+          retention-days: 30
+          if-no-files-found: warn
