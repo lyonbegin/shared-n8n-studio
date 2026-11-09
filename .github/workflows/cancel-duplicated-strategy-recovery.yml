@@ -1,0 +1,18 @@
+name: Cancel accidental duplicate 3537 source reharvest
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - '.github/workflows/cancel-duplicated-strategy-recovery.yml'
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel-duplicate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel duplicate reharvest, original four shards already succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run cancel 42585981692 --repo lyonbegin/shared-n8n-studio
