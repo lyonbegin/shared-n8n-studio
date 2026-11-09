@@ -1,0 +1,49 @@
+name: Strategy v8 multiline Library native Python internal parity
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths: ['.github/workflows/strategy-library-multiline-parity-v8.yml']
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  parity:
+    name: Native v8 source vs inline PYNE execution shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install free PYNE runtime
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Restore unchanged exact source Library 69 versions and v8 inlined Python
+        run: |
+          mkdir -p exact_v7 native_0 native_1 native_all/strategies
+          gh run download 42603032159 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-library-v7-strict-parse-sha-verified -D exact_v7
+          gh run download 42605796150 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-multiline-native-direct-0 -D native_0
+          gh run download 42605796150 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-multiline-native-direct-1 -D native_1
+          cp -rn native_0/strategies/. native_all/strategies/ || true
+          cp -rn native_1/strategies/. native_all/strategies/ || true
+      - name: Compare original Strategy plus exact Libraries vs v8 inlined Strategy
+        run: |
+          source .pyne-venv/bin/activate
+          python recovery/test_original_vs_inline_parity_v3.py \
+            --bundles exact_v7 --inline native_all \
+            --output parity_v8_${{ matrix.shard }} \
+            --shard ${{ matrix.shard }} --shards 2 --timeout 20
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-native-v8-internal-parity-${{ matrix.shard }}
+          path: parity_v8_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
