@@ -1,0 +1,19 @@
+{
+  "first": 1921,
+  "last": 2020,
+  "expected": 100,
+  "written": 100,
+  "errors": 0,
+  "ticker_verified": 98,
+  "asset_counts": {
+    "EXCLUDE_STOCK": 13,
+    "EXCLUDE_CRYPTO": 43,
+    "HOLD_UNDERLYING": 10,
+    "INCLUDE_ASSET": 13,
+    "INCLUDE_INDEX_FUTURE_POLICY": 19,
+    "HOLD_MISSING_SYMBOL": 2
+  },
+  "source_sha256": "5d2d2dece1c01b7e2d836c6c4b0fb7ce37330d442de220b96c48770300cb28fb",
+  "semantic_review_completed": false,
+  "programmatic_review_completed": true
+}
