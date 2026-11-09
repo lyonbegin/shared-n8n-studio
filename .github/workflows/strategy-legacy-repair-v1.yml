@@ -1,0 +1,66 @@
+name: Strategy 4428 source-preserving legacy Pine repair v1
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths: ['recovery/legacy_version_repair_v1.py','.github/workflows/strategy-legacy-repair-v1.yml']
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  legacy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1,2,3]}
+    env: {GH_TOKEN: '${{ github.token }}', WF02_ADAPTER_DIR: /tmp/wf02-isolated/n8n/editor-adapter}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install pinned hoox-PYNE compiler
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Reuse isolated WF02 source without changing Railway
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - name: Restore exact open Pine sources and former conversion audit
+        run: |
+          mkdir -p open_source prior_audit
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D open_source
+          gh run download 42586306099 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-official-recovery-and-pyne-full-audit -D prior_audit
+          test -f prior_audit/strategy4428_all_pipeline_status.csv
+      - name: Compile selected pending original Pine, preserve any syntax-probe source separately
+        run: |
+          source .pyne-venv/bin/activate
+          python -m py_compile recovery/legacy_version_repair_v1.py
+          python recovery/legacy_version_repair_v1.py \
+            --sources open_source --audit prior_audit/strategy4428_all_pipeline_status.csv \
+            --output legacy_result_${{ matrix.shard }} \
+            --shards 4 --shard ${{ matrix.shard }} --timeout 25
+      - name: Audit output hashes and forbid unvalidated parity claims
+        run: |
+          python - <<'PY'
+          import json,hashlib,ast
+          from pathlib import Path
+          p=Path('legacy_result_${{ matrix.shard }}')
+          rows=json.loads((p/'results.json').read_text())
+          for r in rows:
+            if not r['python_sha256']:continue
+            item=p/'strategies'/r['script_id']
+            data=(item/'generated.py').read_bytes()
+            assert hashlib.sha256(data).hexdigest()==r['python_sha256']
+            ast.parse(data.decode())
+            assert not r['parity_verified']
+          print('VERIFIED_LEGACY_ATTEMPT',len(rows))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy4428-legacy-repair-v1-${{ matrix.shard }}
+          path: legacy_result_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
