@@ -1,0 +1,30 @@
+name: Strategy 960 legitimate public code search pilot
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/protected960_github_code_search_probe.py'
+      - '.github/workflows/strategy-960-public-code-search-pilot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Probe exact ID public GitHub code search without TradingView hidden source access
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python recovery/protected960_github_code_search_probe.py
+      - name: Save public search access findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy960-github-code-search-capability
+          path: protected960_gitcode_search_probe.json
+          if-no-files-found: warn
