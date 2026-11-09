@@ -1,0 +1,58 @@
+name: Strategy 3455 exact Library v2 plus real PYNE execution
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/collect_exact_recursive_libraries_v2.py'
+      - 'recovery/test_exact_library_runtime.py'
+      - '.github/workflows/strategy3455-recursive-library-v2-runtime.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recursive-library-plus-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Set up isolated free PYNE 0.6.31
+        run: |
+          python -m venv .library-venv
+          .library-venv/bin/python -m pip install --disable-pip-version-check "hoox-pyne[compile]==0.6.31"
+      - name: Restore original 891 + new 2564 exact Pine files
+        run: |
+          mkdir -p source_old source_new
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recursive-library-all-packages -D source_old
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D source_new
+      - name: Reuse SHA-verified previous exact Library versions
+        run: |
+          mkdir -p source_library_v1
+          gh run download 42594398085 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-version-recursive-library-bundles -D source_library_v1
+      - name: Re-evaluate exact names and author metadata, fetch missing exact versions only
+        run: |
+          python recovery/collect_exact_recursive_libraries_v2.py \
+            --old source_old --new source_new \
+            --existing source_library_v1 \
+            --out exact_library_result
+      - name: Test complete Library bundles with actual free PYNE runner
+        run: |
+          source .library-venv/bin/activate
+          python recovery/test_exact_library_runtime.py \
+            --root exact_library_result --timeout 12
+      - name: Publish per-Strategy Pine+all exact Libraries+real runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy3455-recursive-libraries-v2-pyne-runtime
+          path: exact_library_result/
+          retention-days: 30
+          if-no-files-found: warn
+          compression-level: 6
