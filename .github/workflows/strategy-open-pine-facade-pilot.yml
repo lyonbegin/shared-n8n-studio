@@ -1,0 +1,36 @@
+name: Strategy open Pine facade pilot
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths: 
+      - 'recovery/pine_facade_pilot.py'
+      - '.github/workflows/strategy-open-pine-facade-pilot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Restore 4428 exact status
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          mkdir -p source_4428
+          gh run download 42567572031 -R lyonbegin/shared-n8n-studio \
+            -n strategy-4428-pine-source-result -D source_4428
+      - name: Probe official publicly visible Pine only
+        run: python recovery/pine_facade_pilot.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy4428-facade-source-pilot
+          path: |
+            facade_pilot.json
+            source_recovery_probe_sources/
+          retention-days: 15
+          if-no-files-found: warn
