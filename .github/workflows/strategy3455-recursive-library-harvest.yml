@@ -1,0 +1,46 @@
+name: Strategy 3455 recursive exact-version public Library harvest
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/collect_exact_recursive_libraries.py'
+      - '.github/workflows/strategy3455-recursive-library-harvest.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  public-library-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Verify import scanner, declaration parser and nested imports
+        run: python recovery/collect_exact_recursive_libraries.py --selftest
+      - name: Restore previous 891 original Strategy Pine sources
+        run: |
+          mkdir -p source_old
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recursive-library-all-packages -D source_old
+      - name: Restore latest additional 2564 official public Strategy Pine sources
+        run: |
+          mkdir -p source_new
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D source_new
+      - name: Download exact imported Library versions and all recursive dependencies
+        run: |
+          python recovery/collect_exact_recursive_libraries.py \
+            --old source_old --new source_new --out exact_library_result
+      - name: Export 3455-Strategy audit with per-strategy Library copies and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy3455-exact-version-recursive-library-bundles
+          path: exact_library_result/
+          retention-days: 30
+          if-no-files-found: warn
+          compression-level: 6
