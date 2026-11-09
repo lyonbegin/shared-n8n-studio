@@ -1,0 +1,54 @@
+name: Strategy Library native Pine to Python batch proof
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/try_native_inline_batch.py'
+      - '.github/workflows/native-inline-batch-real.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-emit:
+    name: Native Pine inline shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install free hoox PYNE compiler in isolated environment
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install --disable-pip-version-check 'hoox-pyne[compile]==0.6.31'
+      - name: Clone existing WF02 compiler to temporary read-only directory
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+          test -f /tmp/wf02-isolated/n8n/editor-adapter/investment_free_pyne.py
+      - name: Restore 70 verified exact-version complete dependency strategy packages
+        run: |
+          mkdir -p source_library_v2
+          gh run download 42594902385 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-recursive-libraries-v2-pyne-runtime -D source_library_v2
+      - name: Test auditable Pine inline and genuine Python native emission
+        run: |
+          source .pyne-venv/bin/activate
+          python recovery/try_native_inline_batch.py \
+            --root source_library_v2 --out inline_shard_${{ matrix.shard }} \
+            --shards 2 --shard ${{ matrix.shard }}
+      - name: Upload generated Python and refusal reasons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy-real-native-inline-shard-${{ matrix.shard }}
+          path: inline_shard_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
