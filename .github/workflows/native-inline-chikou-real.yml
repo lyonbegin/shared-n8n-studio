@@ -1,0 +1,47 @@
+name: Real Strategy native inline Chikou Pine-to-Python proof
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/try_native_inline_real_chikou.py'
+      - '.github/workflows/native-inline-chikou-real.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-emit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install isolated free PYNE emitter
+        run: |
+          python -m venv .native-pyne-venv
+          .native-pyne-venv/bin/python -m pip install --disable-pip-version-check 'hoox-pyne[compile]==0.6.31'
+      - name: Get unmodified WF02 converter functions
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - name: Restore actual per-Strategy pinned Library bundle
+        run: |
+          mkdir -p source_library_v1
+          gh run download 42594398085 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-version-recursive-library-bundles -D source_library_v1
+      - name: Combine Chikou exported Pine function with exact Strategy
+        run: |
+          source .native-pyne-venv/bin/activate
+          python recovery/try_native_inline_real_chikou.py \
+            --root source_library_v1 --out native_inline_experiment
+      - name: Publish genuine emitter result (not TradingView parity)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy-real-pine-chikou-library-native-emitter-trial
+          path: native_inline_experiment/
+          retention-days: 30
+          if-no-files-found: warn
