@@ -1,0 +1,68 @@
+name: Strategy 3455 recursive Library repair v9
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths: ['recovery/try_multiline_function_inline.py','recovery/try_native_inline_batch.py','.github/workflows/strategy-library-closure-v9-gap.yml']
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  native:
+    name: Real free PYNE multiline ${{ matrix.mode }} shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [direct,transitive]
+        shard: [0,1]
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install free hoox PYNE 0.6.31
+        run: |
+          python -m venv .isolated-pyne
+          .isolated-pyne/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Clone unmodified WF02 free converter
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - name: Restore exact Library 69 versions and complete Strategy 84 originals
+        run: |
+          mkdir -p exact_v7
+          gh run download 42603032159 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-library-v7-strict-parse-sha-verified -D exact_v7
+      - name: Compile safe multiline direct or recursive function-only Library inline
+        run: |
+          source .isolated-pyne/bin/activate
+          if [ "${{ matrix.mode }}" = transitive ]; then
+            python recovery/try_multiline_function_inline.py --transitive \
+              --root exact_v7 --out result_${{ matrix.mode }}_${{ matrix.shard }} \
+              --shards 2 --shard ${{ matrix.shard }}
+          else
+            python recovery/try_multiline_function_inline.py \
+              --root exact_v7 --out result_${{ matrix.mode }}_${{ matrix.shard }} \
+              --shards 2 --shard ${{ matrix.shard }}
+          fi
+      - name: Verify all actually generated native Python source is parsable
+        run: |
+          python - <<'PY'
+          import json,hashlib,ast
+          from pathlib import Path
+          out=Path('result_${{ matrix.mode }}_${{ matrix.shard }}')
+          rows=json.loads((out/'result.json').read_text())
+          for r in rows:
+            if r['status']=='NATIVE_PYTHON_EMITTED_UNVALIDATED':
+              data=(out/'strategies'/r['id']/'generated.py').read_bytes()
+              assert hashlib.sha256(data).hexdigest()==r['generated_python_sha256']
+              ast.parse(data.decode())
+          print('NATIVE_COMPILATION_HASH_AND_AST_PASS',len(rows),flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-repair-v9-${{ matrix.mode }}-${{ matrix.shard }}
+          path: result_${{ matrix.mode }}_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
