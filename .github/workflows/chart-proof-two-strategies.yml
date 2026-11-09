@@ -1,0 +1,48 @@
+name: Verify original TradingView screenshots
+on:
+  push:
+    paths:
+      - '.github/workflows/chart-proof-two-strategies.yml'
+  workflow_dispatch:
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download original published charts and page metadata
+        shell: bash
+        run: |
+          mkdir -p evidence
+          python - <<'PY'
+          import urllib.request, json, pathlib, re, html
+          out=pathlib.Path('evidence'); ids={'06wt9GNj':'Stochastic-RSI-Strategy-with-SMA-and-VWAP-Filters','089fmfw1':'Dynamo-Strategy-Backtest'}
+          result={}
+          for sid,slug in ids.items():
+              rec={'images':[],'errors':[]}
+              u='https://www.tradingview.com/script/'+sid+'-'+slug+'/'
+              headers={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36'}
+              for host in ('www','pl','tr','my'):
+                  try:
+                      url=u.replace('www.tradingview.com',host+'.tradingview.com')
+                      with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=20) as r: raw=r.read(3000000)
+                      (out/(sid+'.html')).write_bytes(raw)
+                      rec['page_status']=200;rec['page_url']=url;break
+                  except Exception as e: rec['errors'].append('page '+host+': '+str(e)[:150])
+              for v in ('_mid.webp','_mid.png','.png','_mid.jpg'):
+                  img='https://s3.tradingview.com/'+sid[0]+'/'+sid+v
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(img,headers=headers),timeout=15) as r:
+                          blob=r.read(4000000);typ=r.headers.get('content-type','')
+                      if len(blob)>2000 and 'image' in typ:
+                          fn=sid+v
+                          (out/fn).write_bytes(blob)
+                          rec['images'].append({'url':img,'file':fn,'bytes':len(blob),'type':typ})
+                  except Exception as e: rec['errors'].append('image '+img+': '+str(e)[:150])
+              result[sid]=rec
+              print(sid,rec,flush=True)
+          (out/'proof.json').write_text(json.dumps(result,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chart-proof-two-strategies
+          path: evidence/
+          if-no-files-found: error
