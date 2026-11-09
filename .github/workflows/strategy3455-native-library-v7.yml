@@ -1,0 +1,61 @@
+name: Strategy 3455 native Python from recursive Library v7
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths: ['.github/workflows/strategy3455-native-library-v7.yml']
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  native-compile:
+    name: Real native Python Library inline shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install pinned free PYNE native emitter
+        run: |
+          python -m venv .isolated-pyne
+          .isolated-pyne/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Clone existing WF02 adapter for compiling Pine
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - name: Download exact source-preserving Library v7 bundle
+        run: |
+          mkdir -p source_library_v7
+          gh run download 42603032159 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-library-v7-strict-parse-sha-verified -D source_library_v7
+          test -f source_library_v7/summary.json
+      - name: Actually compile safely-inlined Pine into native Python
+        run: |
+          source .isolated-pyne/bin/activate
+          python recovery/try_native_inline_batch.py \
+            --root source_library_v7 --out native_v7_${{ matrix.shard }} \
+            --shards 2 --shard ${{ matrix.shard }}
+      - name: Verify generated Python hash and preserve refusal reasons
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          folder=Path('native_v7_${{ matrix.shard }}')
+          rows=json.loads((folder/'result.json').read_text())
+          for r in rows:
+            if r['status']=='NATIVE_PYTHON_EMITTED_UNVALIDATED':
+              p=folder/'strategies'/r['id']/'generated.py'
+              assert p.is_file()
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==r['generated_python_sha256']
+          print('NATIVE_HASH_VERIFIED',len(rows),flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-native-v7-${{ matrix.shard }}
+          path: native_v7_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
