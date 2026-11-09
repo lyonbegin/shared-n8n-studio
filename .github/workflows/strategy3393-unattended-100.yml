@@ -1,0 +1,84 @@
+name: TradingView 3393 unattended 100-item checkpoint analysis
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths:
+      - recovery/strategy3393_batch_evidence.py
+      - .github/workflows/strategy3393-unattended-100.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: strategy3393-unattended-100
+  cancel-in-progress: false
+jobs:
+  batch-100-until-end:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: \${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download pinned original and Python archives
+        shell: bash
+        run: |
+          mkdir -p inputs/old inputs/recovered inputs/final-originals inputs/native10 inputs/legacy1 inputs/legacy2 inputs/legacy3 chart_meta
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recursive-library-all-packages -D inputs/old
+          gh run download 42586306099 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-official-recovered-python-packages -D inputs/recovered
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D inputs/final-originals
+          gh run download 42617532935 -R lyonbegin/shared-n8n-studio \
+            --pattern 'strategy3455-library-v10-*' -D inputs/native10
+          gh run download 42614039208 -R lyonbegin/shared-n8n-studio \
+            --pattern 'strategy4428-legacy-repair-v1-*' -D inputs/legacy1
+          gh run download 42617041898 -R lyonbegin/shared-n8n-studio \
+            --pattern 'strategy4428-late-original-v2-*' -D inputs/legacy2
+          gh run download 42618324102 -R lyonbegin/shared-n8n-studio \
+            --pattern 'strategy4428-legacy-semantic-v3-*' -D inputs/legacy3
+          gh run download 42640349293 -R lyonbegin/shared-n8n-studio \
+            -n tradingview-3393-chart-aggregated -D chart_meta
+      - name: Validate script and run entire queue 100 per checkpoint without approvals
+        shell: bash
+        run: |
+          python -m py_compile recovery/strategy3393_batch_evidence.py
+          python recovery/strategy3393_batch_evidence.py \
+            --input inputs --chart chart_meta/published_chart_evidence_all.json \
+            --out analysis3393 --git-persist
+      - name: Final consistency check
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib,json,hashlib
+          p=pathlib.Path('analysis3393/batches')
+          results=sorted(p.glob('*.summary.json'))
+          assert len(results)==34,len(results)
+          rows=0
+          for f in results:
+              s=json.loads(f.read_text())
+              assert s['errors']==0 and s['written']==s['expected']
+              fp=p/f.name.replace('.summary.json','.jsonl')
+              assert hashlib.sha256(fp.read_bytes()).hexdigest()==s['source_sha256']
+              rows+=s['written']
+          assert rows==3373,rows
+          x=json.loads(pathlib.Path('analysis3393/progress.json').read_text())
+          assert x['processed_to']==3393
+          assert x['automatic_user_approval_required'] is False
+          assert x['completed_by_model_semantic_analysis']==0
+          print('VERIFIED_34_BATCHES',rows,'CODE-EVIDENCE_ONLY')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3393-100item-checkpoints
+          path: analysis3393/
+          retention-days: 60
+          if-no-files-found: warn
