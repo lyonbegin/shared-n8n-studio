@@ -1,0 +1,52 @@
+name: Strategy 3455 exact recursive Library v7 strict declaration parser
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths: ['recovery/collect_exact_recursive_libraries_v7.py','.github/workflows/strategy3455-library-v7-strict-parse.yml']
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Unit test source dependency scanner
+        run: python recovery/collect_exact_recursive_libraries_v7.py --selftest
+      - name: Restore original 3455 Pine and 68 SHA-verified Library versions
+        run: |
+          mkdir -p source_old source_new previous_exact
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio -n strategy4428-recursive-library-all-packages -D source_old
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio -n strategy4428-final-public-pine-source-packages-v2 -D source_new
+          gh run download 42602649882 -R lyonbegin/shared-n8n-studio -n strategy3455-exact-library-v6-historic-owner-verified -D previous_exact
+      - name: Recurse the exact missing Library dependency closure with corrected declaration recognition
+        run: |
+          python recovery/collect_exact_recursive_libraries_v7.py \
+            --old source_old --new source_new --existing previous_exact --out exact_v7
+      - name: Verify SHA-256 of each original source and per-strategy Library copy
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          root=Path('exact_v7')
+          manifests=list(root.glob('strategies/*/manifest.json'))
+          assert len(manifests)==86
+          for file in manifests:
+            d=json.loads(file.read_text());base=file.parent
+            assert hashlib.sha256((base/'strategy.pine').read_bytes()).hexdigest()==d['strategy_sha256']
+            for l in d['libraries']:
+              user,name,version=l['ref'].split('/')
+              p=base/'libraries'/user/name/(version+'.pine')
+              assert p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest()==l['sha256']
+          print('ALL_86_STRATEGIES_EXACT_SOURCE_HASH_VERIFIED')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-exact-library-v7-strict-parse-sha-verified
+          path: exact_v7/
+          retention-days: 30
+          if-no-files-found: warn
