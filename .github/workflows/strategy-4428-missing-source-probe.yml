@@ -1,0 +1,36 @@
+name: Strategy 4428 missing source diagnosis
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/tradingview_public_probe.py'
+      - '.github/workflows/strategy-4428-missing-source-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore exact original WF01 Strategy catalog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p source_4428
+          gh run download 42567572031 -R lyonbegin/shared-n8n-studio \
+            -n strategy-4428-pine-source-result -D source_4428
+      - name: Diagnose 12 publicly retrievable TradingView script pages
+        run: python recovery/tradingview_public_probe.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy4428-source-recovery-probe
+          path: recovery_probe.json
+          retention-days: 15
+          if-no-files-found: warn
