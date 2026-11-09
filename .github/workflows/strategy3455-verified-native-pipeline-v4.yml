@@ -1,0 +1,146 @@
+name: Strategy exact Pine source integrity and Library native Python audit v4
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/collect_exact_recursive_libraries_v4.py'
+      - 'recovery/test_original_vs_inline_parity.py'
+      - '.github/workflows/strategy3455-verified-native-pipeline-v4.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify-sources:
+    name: Restore exact source bytes, verify all Strategy and Library hashes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Restore actual 3455 Pine originals from pinned earlier Actions
+        run: |
+          mkdir -p source_old source_new source_library_v3
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recursive-library-all-packages -D source_old
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D source_new
+          gh run download 42596144047 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-recursive-libraries-v3-source-lock -D source_library_v3
+      - name: Recreate per-Strategy exact bytes and full transitive Library copies
+        run: |
+          python recovery/collect_exact_recursive_libraries_v4.py \
+            --old source_old --new source_new \
+            --existing source_library_v3 --out exact_library_v4
+      - name: Verify every stored Strategy and Library matches manifest SHA256
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path('exact_library_v4')
+          manifests=sorted(root.glob('strategies/*/manifest.json'))
+          assert len(manifests)==86, len(manifests)
+          checked=0
+          for manifest in manifests:
+              d=json.loads(manifest.read_text(encoding='utf-8'))
+              src=manifest.parent/'strategy.pine'
+              assert src.is_file()
+              assert hashlib.sha256(src.read_bytes()).hexdigest()==d['strategy_sha256'],d['strategy_id']
+              checked+=1
+              for lib in d['libraries']:
+                  path=manifest.parent/'libraries'/(lib['ref']+'.pine')
+                  assert path.is_file(),(d['strategy_id'],lib['ref'])
+                  assert hashlib.sha256(path.read_bytes()).hexdigest()==lib['sha256'],(d['strategy_id'],lib['ref'])
+                  checked+=1
+          print('PASS_PINE_SOURCE_AND_LIBRARY_SHA256',checked)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strategy3455-exact-originals-transitive-libraries-v4-sha-verified
+          path: exact_library_v4/
+          retention-days: 30
+          if-no-files-found: error
+  native-pyne:
+    name: Real native Python generation from source-preserving Library inline ${{ matrix.shard }}/2
+    needs: verify-sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Isolated free PYNE compiler installation
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install --disable-pip-version-check 'hoox-pyne[compile]==0.6.31'
+      - name: Restore existing read-only WF02 compiler
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - uses: actions/download-artifact@v4
+        with:
+          name: strategy3455-exact-originals-transitive-libraries-v4-sha-verified
+          path: exact_library_v4
+      - name: Run conservative native emission; unsupported cases remain blocked
+        run: |
+          source .pyne-venv/bin/activate
+          python recovery/try_native_inline_batch.py \
+            --root exact_library_v4 --out native_v4_${{ matrix.shard }} \
+            --shard ${{ matrix.shard }} --shards 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy-native-v4-${{ matrix.shard }}
+          path: native_v4_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
+  internal-parity:
+    name: Compare original Library and derived Pine via PYNE ${{ matrix.shard }}/2
+    needs: native-pyne
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install standalone free PYNE interpreter
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install --disable-pip-version-check 'hoox-pyne[compile]==0.6.31'
+      - uses: actions/download-artifact@v4
+        with:
+          name: strategy3455-exact-originals-transitive-libraries-v4-sha-verified
+          path: exact_library_v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: strategy-native-v4-*
+          path: native_results
+          merge-multiple: false
+      - name: Merge individual native Python outputs, retaining exact Strategy IDs
+        run: |
+          mkdir -p native_all/strategies
+          cp -rn native_results/strategy-native-v4-0/strategies/. native_all/strategies/ || true
+          cp -rn native_results/strategy-native-v4-1/strategies/. native_all/strategies/ || true
+      - name: Compare same 48 OHLCV bars in original and derived Pine
+        run: |
+          source .pyne-venv/bin/activate
+          python recovery/test_original_vs_inline_parity.py \
+            --bundles exact_library_v4 --inline native_all \
+            --output parity_v4_${{ matrix.shard }} \
+            --shards 2 --shard ${{ matrix.shard }} --timeout 15
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy-original-inline-pyne-parity-v4-${{ matrix.shard }}
+          path: parity_v4_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
