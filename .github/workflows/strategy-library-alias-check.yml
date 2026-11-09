@@ -1,0 +1,21 @@
+name: Verify TradingView historic Library publisher aliases
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths: ['recovery/library_publisher_alias_probe.py','.github/workflows/strategy-library-alias-check.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python recovery/library_publisher_alias_probe.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy-library-publisher-alias-evidence
+          path: publisher_alias_probe.json
