@@ -1,0 +1,38 @@
+name: Strategy 4428 aggregate verified prior shards
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'reports/aggregate_strategy4428_results.py'
+      - '.github/workflows/strategy-4428-aggregate-only.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  aggregate-previous-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download four completed shards from original run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: lyonbegin/shared-n8n-studio
+          run-id: 42575393731
+          pattern: strategy4428-shard-*
+          path: collected
+          merge-multiple: false
+      - name: Aggregate 4428 IDs and library references
+        run: python reports/aggregate_strategy4428_results.py
+      - name: Upload final CSV and JSON audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-final-audit-verified
+          path: final_4428_result/
+          retention-days: 30
+          if-no-files-found: error
