@@ -1,0 +1,26 @@
+name: Public Pine Library exact version pilot
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/pilot_exact_public_library_versions.py'
+      - '.github/workflows/library-exact-version-pilot.yml'
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  library-lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python recovery/pilot_exact_public_library_versions.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-library-version-pilot
+          path: |
+            library_version_pilot.json
+            library_pilot_sources/
+          if-no-files-found: warn
