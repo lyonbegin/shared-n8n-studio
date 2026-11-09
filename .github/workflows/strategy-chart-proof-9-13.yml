@@ -1,0 +1,72 @@
+name: Verify TradingView chart original symbols 9-13
+on:
+  push:
+    paths:
+      - '.github/workflows/strategy-chart-proof-9-13.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download publication original chart and JSON metadata
+        run: |
+          mkdir -p chart_proof_9_13
+          python - <<'PY'
+          import urllib.request,re,json,pathlib,html,urllib.parse
+          root=pathlib.Path('chart_proof_9_13')
+          data={
+          '08R4aSqS':'Forex-scalper-2xEMA-SRSI-MACD',
+          '08eSyDlq':'DRM-Strategy',
+          '0BHGOwdj':'15min50MA',
+          '0BcdTWoV':'Sector-Rotation-Z-Score-Strategy',
+          '0CVvd49h':'MASU-v7-2-NW-ELM-BOS'}
+          heads={'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36','Accept-Language':'en-US,en;q=0.9'}
+          results={}
+          for sid,slug in data.items():
+              rec={'script_id':sid,'page_urls_attempted':[],'downloaded_images':[]}
+              txt=''
+              for domain in ('www','pl','tr','in'):
+                  url=f'https://{domain}.tradingview.com/script/{sid}-{slug}/'
+                  rec['page_urls_attempted'].append(url)
+                  try:
+                      req=urllib.request.Request(url,headers=heads)
+                      with urllib.request.urlopen(req,timeout=25) as r: txt=r.read(6000000).decode('utf-8','replace')
+                      rec['page_url_confirmed']=url
+                      (root/(sid+'.html')).write_text(txt)
+                      break
+                  except Exception as ex:rec.setdefault('page_errors',[]).append(str(ex)[:140])
+              if txt:
+                  patterns={
+                    'published_symbol':r'"symbol":\{"pro_symbol":"([^"]+)"',
+                    'interval':r'"interval":"([^"]+)"',
+                    'webp_url':r'"webp_url":"([^"]+)"',
+                    'ticker_title':r'"ticker_title":"([^"]+)"',
+                    'exchange':r'"symbol":\{"pro_symbol":"[^"]+","short_name":"[^"]+","exchange":"([^"]+)"',
+                  }
+                  for key,pat in patterns.items():
+                      m=re.search(pat,txt)
+                      rec[key]=html.unescape(m.group(1)) if m else None
+              imgurls=[]
+              if rec.get('webp_url'):
+                  imgurls.append(rec['webp_url'].replace('_mid.webp','.png'))
+                  imgurls.append(rec['webp_url'])
+              imgurls+=['https://s3.tradingview.com/'+sid[0]+'/'+sid+'.png','https://s3.tradingview.com/'+sid[0]+'/'+sid+'_mid.png']
+              for i,url in enumerate(dict.fromkeys(imgurls)):
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(url,headers=heads),timeout=20) as r:
+                          b=r.read(4000000); ct=r.headers.get('content-type','')
+                      if len(b)>5000 and 'image' in ct:
+                          ext='.webp' if 'webp' in ct else '.png'
+                          fn=f'{sid}_{i:02}{ext}'
+                          (root/fn).write_bytes(b)
+                          rec['downloaded_images'].append({'url':url,'file':fn,'size':len(b)})
+                  except Exception as e:rec.setdefault('image_errors',[]).append(str(e)[:160])
+              results[sid]=rec
+              print('RESULT',sid,'SYMBOL',rec.get('published_symbol'),'TF',rec.get('interval'),'IMAGES',len(rec['downloaded_images']),flush=True)
+          (root/'proof.json').write_text(json.dumps(results,indent=2,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: original-charts-9-13
+          path: chart_proof_9_13/
+          if-no-files-found: error
