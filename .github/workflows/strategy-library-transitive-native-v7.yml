@@ -1,0 +1,61 @@
+name: Strategy exact recursive Library v7 transitive function native Python
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths: ['recovery/try_transitive_function_inline.py','.github/workflows/strategy-library-transitive-native-v7.yml']
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  transitive:
+    name: Safe transitive Library linker shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install free pinned PYNE compiler
+        run: |
+          python -m venv .isolated-pyne
+          .isolated-pyne/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Read-only clone of WF02 converter
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - name: Download exact v7 complete recursive Library sources
+        run: |
+          mkdir -p exact_v7
+          gh run download 42603032159 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-library-v7-strict-parse-sha-verified -D exact_v7
+          test -f exact_v7/summary.json
+      - name: Compile nested pure function Library sources to native Python
+        run: |
+          source .isolated-pyne/bin/activate
+          python recovery/try_transitive_function_inline.py \
+            --root exact_v7 --out transitive_${{ matrix.shard }} \
+            --shards 2 --shard ${{ matrix.shard }}
+      - name: Check native Python code and sha for every emitted output
+        run: |
+          python - <<'PY'
+          import ast,hashlib,json
+          from pathlib import Path
+          folder=Path('transitive_${{ matrix.shard }}')
+          rows=json.loads((folder/'result.json').read_text())
+          for r in rows:
+            if r['status']=='NATIVE_PYTHON_EMITTED_UNVALIDATED':
+              raw=(folder/'strategies'/r['id']/'generated.py').read_bytes()
+              assert hashlib.sha256(raw).hexdigest()==r['generated_python_sha256']
+              ast.parse(raw.decode('utf-8'))
+          print('TRANSITIVE_NATIVE_BYTE_CHECK_DONE',len(rows),flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-transitive-native-v7-${{ matrix.shard }}
+          path: transitive_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
