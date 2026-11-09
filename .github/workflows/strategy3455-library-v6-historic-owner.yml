@@ -1,0 +1,54 @@
+name: Strategy 3455 exact Library v6 historic publisher identity audit
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/collect_exact_recursive_libraries_v6.py'
+      - '.github/workflows/strategy3455-library-v6-historic-owner.yml'
+  workflow_dispatch:
+permissions: {contents: read,actions: read}
+jobs:
+  closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Unit test recursive imports
+        run: python recovery/collect_exact_recursive_libraries_v6.py --selftest
+      - name: Download original strategy Pines and previous exact libraries
+        run: |
+          mkdir -p source_old source_new previous_exact
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio -n strategy4428-recursive-library-all-packages -D source_old
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio -n strategy4428-final-public-pine-source-packages-v2 -D source_new
+          gh run download 42602150192 -R lyonbegin/shared-n8n-studio -n strategy3455-exact-library-v5-author-feed-packages -D previous_exact
+      - name: Resolve renamed historic publishers and exact Library version recursively
+        run: |
+          python recovery/collect_exact_recursive_libraries_v6.py --old source_old \
+            --new source_new --existing previous_exact --out exact_v6
+      - name: Verify every saved strategy and Library byte hash
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          root=Path('exact_v6');files=list(root.glob('strategies/*/manifest.json'))
+          assert len(files)==86,len(files)
+          for file in files:
+            m=json.loads(file.read_text());directory=file.parent
+            assert hashlib.sha256((directory/'strategy.pine').read_bytes()).hexdigest()==m['strategy_sha256']
+            for lib in m['libraries']:
+              author,name,version=lib['ref'].split('/')
+              path=directory/'libraries'/author/name/(version+'.pine')
+              assert path.is_file()
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==lib['sha256']
+          print('EXACT_SOURCE_HASHES_VALIDATED',len(files))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-exact-library-v6-historic-owner-verified
+          path: exact_v6/
+          retention-days: 30
+          if-no-files-found: warn
