@@ -1,0 +1,20 @@
+name: Validate public exact-version Pine library author feed
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/library_author_feed_pilot.py'
+      - '.github/workflows/strategy-library-author-pilot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-public-library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Confirm author feed and exact pinned Library Pine
+        run: python recovery/library_author_feed_pilot.py
