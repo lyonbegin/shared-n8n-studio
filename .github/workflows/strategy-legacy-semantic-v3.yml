@@ -1,0 +1,73 @@
+name: Strategy 4428 legacy v2 semantics repair v3 free PYNE
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths:
+      - recovery/legacy_semantic_migration_v3.py
+      - .github/workflows/strategy-legacy-semantic-v3.yml
+  workflow_dispatch:
+permissions: {contents: read, actions: read}
+jobs:
+  migrate-legacy:
+    name: Explicit security lookahead and history shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1,2,3]}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WF02_ADAPTER_DIR: /tmp/wf02-isolated/n8n/editor-adapter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install free hoox-PYNE compiler 0.6.31
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Clone isolated WF02 source only
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - name: Retrieve all 100 previously blocked cases and exact original Pine
+        run: |
+          mkdir -p old_results late_results latest_sources
+          gh run download 42614039208 -R lyonbegin/shared-n8n-studio \
+            --pattern 'strategy4428-legacy-repair-v1-*' -D old_results
+          gh run download 42617041898 -R lyonbegin/shared-n8n-studio \
+            --pattern 'strategy4428-late-original-v2-*' -D late_results
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D latest_sources
+      - name: Apply official v2 migration rules and attempt actual free PYNE
+        run: |
+          source .pyne-venv/bin/activate
+          python -m py_compile recovery/legacy_semantic_migration_v3.py
+          python recovery/legacy_semantic_migration_v3.py \
+            --old-results old_results --late-results late_results \
+            --sources latest_sources --out legacy_v3_${{ matrix.shard }} \
+            --shards 4 --shard ${{ matrix.shard }} --timeout 25
+      - name: Verify source hashes, generated AST and no unverified parity claims
+        run: |
+          python - <<'PY'
+          import ast,hashlib,json
+          from pathlib import Path
+          root=Path('legacy_v3_${{ matrix.shard }}')
+          rows=json.loads((root/'results.json').read_text())
+          for r in rows:
+            assert not r['tradingview_parity_verified']
+            assert not r['order_parity_verified']
+            if not r['python_sha256']:continue
+            path=root/'strategies'/r['script_id']/'generated.py'
+            assert path.is_file()
+            assert hashlib.sha256(path.read_bytes()).hexdigest()==r['python_sha256']
+            ast.parse(path.read_text(encoding='utf-8'))
+          print('SOURCE_SHA_PYTHON_AST_VERIFIED',len(rows))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy4428-legacy-semantic-v3-${{ matrix.shard }}
+          path: legacy_v3_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
