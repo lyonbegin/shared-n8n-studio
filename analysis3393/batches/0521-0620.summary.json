@@ -1,0 +1,19 @@
+{
+  "first": 521,
+  "last": 620,
+  "expected": 100,
+  "written": 100,
+  "errors": 0,
+  "ticker_verified": 96,
+  "asset_counts": {
+    "INCLUDE_ASSET": 17,
+    "EXCLUDE_CRYPTO": 46,
+    "HOLD_UNDERLYING": 17,
+    "EXCLUDE_STOCK": 6,
+    "INCLUDE_INDEX_FUTURE_POLICY": 10,
+    "HOLD_MISSING_SYMBOL": 4
+  },
+  "source_sha256": "84ce55535a504fcb51da4c4b2203eb6c2555f51f66f7091a2aa6360ab45399bb",
+  "semantic_review_completed": false,
+  "programmatic_review_completed": true
+}
