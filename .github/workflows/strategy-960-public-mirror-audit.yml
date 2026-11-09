@@ -1,0 +1,38 @@
+name: Strategy 960 published-source access and public archives audit
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/audit_restricted960_public_mirrors.py'
+      - '.github/workflows/strategy-960-public-mirror-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore verified complete Strategy 4428 source inventory
+        run: |
+          mkdir -p final_source
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-source-recovery-report-v2 -D final_source
+          test -s final_source/all_4428_recovery_status.csv
+      - name: Audit 960 closed sources against ten public source archive indexes
+        run: python recovery/audit_restricted960_public_mirrors.py
+      - name: Publish 960-row evidence and candidate URLs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy960-protected-invite-source-authenticity-audit
+          path: restricted960_audit/
+          retention-days: 30
+          if-no-files-found: warn
