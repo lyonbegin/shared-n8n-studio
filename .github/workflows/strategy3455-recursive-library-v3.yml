@@ -1,0 +1,50 @@
+name: Strategy 3455 recursive Library recovery v3 curated verified sources
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/collect_exact_recursive_libraries_v3.py'
+      - '.github/workflows/strategy3455-recursive-library-v3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  exact-library-sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Verify safe source collector syntax
+        run: |
+          python -m py_compile recovery/collect_exact_recursive_libraries_v3.py
+          python recovery/collect_exact_recursive_libraries_v3.py --selftest
+      - name: Restore 891 and 2564 Strategy original Pine sources
+        run: |
+          mkdir -p source_old source_new
+          gh run download 42575393731 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recursive-library-all-packages -D source_old
+          gh run download 42586717657 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-public-pine-source-packages-v2 -D source_new
+      - name: Restore verified Library source corpus v2
+        run: |
+          mkdir -p source_library_v2
+          gh run download 42594902385 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-recursive-libraries-v2-pyne-runtime -D source_library_v2
+      - name: Resolve still-missing exact Library source versions
+        run: |
+          python recovery/collect_exact_recursive_libraries_v3.py \
+            --old source_old --new source_new \
+            --existing source_library_v2 --out exact_library_result
+      - name: Publish exact original Pine and all per-Strategy library copies
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy3455-recursive-libraries-v3-source-lock
+          path: exact_library_result/
+          retention-days: 30
+          if-no-files-found: warn
