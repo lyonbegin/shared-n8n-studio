@@ -26,7 +26,7 @@ for name,url in LIBS:
       try:
         res=json.loads(get(target));src=res.get("source","")
         row[ver]={"source_bytes":len(src.encode()),"sha256":hashlib.sha256(src.encode()).hexdigest(),"pine_library_title":re.findall(r'(?m)^\s*library\s*\(\s*["\x27]([^"\x27]+)',src)[:2],"imports":re.findall(r"(?m)^\s*import\s+([\w.-]+/[\w.-]+/\d+)",src),"head":src[:170]}
-        if src and ver==version:Path("library_pilot_sources").mkdir(exist_ok=True);Path("library_pilot_sources"/(user+"_"+lib+"_"+version+".pine")).write_text(src,encoding="utf-8")
+        if src and ver==version:Path("library_pilot_sources").mkdir(exist_ok=True);(Path("library_pilot_sources")/(user+"_"+lib+"_"+version+".pine")).write_text(src,encoding="utf-8")
       except Exception as e:row[ver]={"error":type(e).__name__+": "+str(e)[:130]}
     row["different_exact_vs_last"]=row.get(version,{}).get("sha256")!=row.get("last",{}).get("sha256")
   except Exception as e:row["error"]=type(e).__name__+":"+str(e)[:170]
