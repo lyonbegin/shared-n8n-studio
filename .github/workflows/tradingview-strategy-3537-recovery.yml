@@ -1,0 +1,107 @@
+name: TradingView Strategy 3537 open-source recovery
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/recover_public_strategy_sources.py'
+      - 'recovery/aggregate_recovery.py'
+      - '.github/workflows/tradingview-strategy-3537-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: tradingview-strategy-3537-open-recovery-20261109
+  cancel-in-progress: false
+jobs:
+  recover:
+    name: Recover Strategy source group ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore exact original 4428 Strategy catalog, no new discovery
+        run: |
+          mkdir -p source_4428
+          gh run download 42567572031 -R lyonbegin/shared-n8n-studio \
+            -n strategy-4428-pine-source-result -D source_4428
+          test -s source_4428/strategy_4428_result/strategy_4428_source_status.csv
+      - name: Recover open source, fail closed on protected or invite-only
+        run: |
+          python recovery/recover_public_strategy_sources.py \
+            --input source_4428/strategy_4428_result/strategy_4428_source_status.csv \
+            --output recovery-shard-${{ matrix.shard }} \
+            --shard ${{ matrix.shard }} --shards 4 --delay 0.65
+      - name: Verify local source SHA in generated packages
+        run: |
+          python - <<'PY'
+          import csv,hashlib
+          from pathlib import Path
+          folder=Path("recovery-shard-${{ matrix.shard }}")
+          rows=list(csv.DictReader((folder/"status.csv").open(encoding="utf-8-sig")))
+          for row in rows:
+              if row["source_path"]:
+                  path=folder/row["source_path"]
+                  assert path.is_file(),row
+                  assert hashlib.sha256(path.read_bytes()).hexdigest()==row["pine_sha256"],row["script_id"]
+          print("SHARD_SHA256_PASS",len(rows),flush=True)
+          PY
+      - name: Preserve shard source, manifest and complete failure audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-recovery-shard-${{ matrix.shard }}
+          path: recovery-shard-${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
+  aggregate:
+    name: Verify exact 4428 IDs and all recovery statuses
+    needs: recover
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore prior 4428 manifest
+        run: |
+          mkdir -p source_4428
+          gh run download 42567572031 -R lyonbegin/shared-n8n-studio \
+            -n strategy-4428-pine-source-result -D source_4428
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: strategy4428-recovery-shard-*
+          path: collected
+          merge-multiple: false
+      - name: Aggregate prior 891 and 3537 recovered status entries
+        run: python recovery/aggregate_recovery.py
+      - name: Publish 4428 source recovery audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-source-recovery-final-report
+          path: final_recovery/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Preserve newly obtained public Pine source packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-official-public-pine-recovered
+          path: collected/
+          retention-days: 30
+          compression-level: 6
+          if-no-files-found: warn
