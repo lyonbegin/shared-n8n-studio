@@ -1,0 +1,131 @@
+name: Strategy 4428 recursive Pine Library isolation
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'isolation/**'
+      - '.github/workflows/strategy-4428-recursive-library-isolated.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: strategy4428-recursive-library-isolation
+  cancel-in-progress: false
+jobs:
+  analyze:
+    name: Strategy shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WF02_ADAPTER_DIR: /tmp/wf02-isolated/n8n/editor-adapter
+    steps:
+      - name: Checkout sandbox branch only
+        uses: actions/checkout@v4
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pinned free PYNE runtime and compiler
+        run: |
+          python -m venv .isolated-venv
+          .isolated-venv/bin/python -m pip install --disable-pip-version-check "hoox-pyne[compile]==0.6.31"
+          .isolated-venv/bin/pyne --version
+      - name: Clone read-only copy of already isolated WF02 code
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+          test -f /tmp/wf02-isolated/n8n/editor-adapter/investment_free_pyne.py
+          test -f /tmp/wf02-isolated/n8n/editor-adapter/investment_pynecomp.py
+          test -f /tmp/wf02-isolated/isolation/wf02_library_aware.py
+          echo "NO_RAILWAY_DB_OR_DEPLOYMENT_USED"
+      - name: Restore actual 4428 audit and 891 immutable Pine files
+        run: |
+          mkdir -p source_4428
+          gh run download 42567572031 -R lyonbegin/shared-n8n-studio \
+            -n strategy-4428-pine-source-result -D source_4428
+          python - <<'PY'
+          import csv,hashlib
+          from pathlib import Path
+          root=Path("source_4428/strategy_4428_result")
+          rows=list(csv.DictReader((root/"strategy_4428_source_status.csv").open(encoding="utf-8-sig")))
+          assert len(rows)==4428 and len({x["script_id"] for x in rows})==4428
+          saved=[x for x in rows if x["source_state"]=="PINE_RETRIEVED_FROM_PINNED_MIRROR"]
+          assert len(saved)==891, f"unexpected source set: {len(saved)}"
+          for x in saved:
+              p=root/x["local_pine_path"]
+              assert p.is_file(),x["script_id"]
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==x["pine_sha256"],x["script_id"]
+          print("INPUT_AUDITED_4428_REAL_PINE",len(saved),flush=True)
+          PY
+      - name: Validate read-only source syntax
+        run: |
+          python -m py_compile isolation/strategy4428_recursive_pipeline.py
+          python -m json.tool isolation/library_source_registry.json >/dev/null
+      - name: Package every Strategy ID, recurse libraries, attempt genuine PYNE conversion
+        shell: bash
+        run: |
+          source .isolated-venv/bin/activate
+          python isolation/strategy4428_recursive_pipeline.py --mode shard \
+            --source-root source_4428/strategy_4428_result \
+            --library-registry isolation/library_source_registry.json \
+            --output shard-${{ matrix.shard }} \
+            --shards 4 --shard ${{ matrix.shard }}
+      - name: Upload per-Strategy independent source + library + PYNE packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
+          compression-level: 6
+  aggregate:
+    name: Aggregate all 4428 outcomes and cross-Strategy shared metadata
+    needs: analyze
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: strategy4428-shard-*
+          path: collected
+          merge-multiple: false
+      - name: Verify exactly 4428 ID records and collate library usage
+        run: |
+          python isolation/strategy4428_recursive_pipeline.py \
+            --mode aggregate --shard-root collected --output final_4428_result
+          python - <<'PY'
+          import csv,json
+          from pathlib import Path
+          rows=list(csv.DictReader(Path("final_4428_result/strategy_4428_full_status.csv").open(encoding="utf-8-sig")))
+          assert len(rows)==4428
+          print("PASSED_ALL_4428_IDS",json.loads(Path("final_4428_result/summary.json").read_text()))
+          PY
+      - name: Save full audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-recursive-library-audit-full
+          path: final_4428_result/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Save 4428 packaged strategies from all shards
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-recursive-library-all-packages
+          path: collected/
+          retention-days: 30
+          if-no-files-found: warn
+          compression-level: 6
