@@ -1,0 +1,67 @@
+name: Strategy 3455 Library v10 builtin namespace collision safe
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths:
+      - recovery/try_native_inline_collision_safe_v10.py
+      - .github/workflows/strategy-library-v10-collision-safe.yml
+  workflow_dispatch:
+permissions: {contents: read, actions: read}
+jobs:
+  compile-v10:
+    name: Exact Library builtin-safe shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install fixed free PYNE
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Clone isolated WF02 adapter
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+      - name: Download immutable source and exact Library v7 closure
+        run: |
+          mkdir -p exact_library
+          gh run download 42603032159 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-library-v7-strict-parse-sha-verified -D exact_library
+          test -f exact_library/summary.json
+      - name: Inline only exported library functions, leave builtins intact
+        run: |
+          source .pyne-venv/bin/activate
+          python -m py_compile recovery/try_native_inline_collision_safe_v10.py
+          python recovery/try_native_inline_collision_safe_v10.py \
+            --root exact_library --out library_v10_${{ matrix.shard }} \
+            --shards 2 --shard ${{ matrix.shard }}
+      - name: Verify every generated Python hash and Python AST
+        run: |
+          python - <<'PY'
+          import ast,hashlib,json
+          from pathlib import Path
+          out=Path('library_v10_${{ matrix.shard }}')
+          rows=json.loads((out/'result.json').read_text())
+          for row in rows:
+            assert row['parity_verified'] is False
+            if row['status']!='NATIVE_PYTHON_EMITTED_UNVALIDATED': continue
+            path=out/'strategies'/row['id']/'generated.py'
+            assert path.exists()
+            assert hashlib.sha256(path.read_bytes()).hexdigest()==row['python_sha256']
+            ast.parse(path.read_text(encoding='utf-8'))
+          print('LIBRARY_V10_PYTHON_SHA_AST_PASS',len(rows))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-library-v10-${{ matrix.shard }}
+          path: library_v10_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
