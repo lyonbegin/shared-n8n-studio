@@ -1,0 +1,58 @@
+name: Strategy 3455 v10 Library internal equivalence 48 bars
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths: [.github/workflows/strategy-library-v10-parity.yml]
+  workflow_dispatch:
+permissions: {contents: read, actions: read}
+jobs:
+  compare:
+    name: Exact original vs v10 derived shard ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1]}
+    env: {GH_TOKEN: ${{ github.token }}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install pinned free PYNE runtime
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install 'hoox-pyne[compile]==0.6.31'
+      - name: Get exact source closure 69 library revisions and v10 native generated
+        run: |
+          mkdir -p exact_v7 part0 part1 merged/strategies
+          gh run download 42603032159 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-exact-library-v7-strict-parse-sha-verified -D exact_v7
+          gh run download 42617532935 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-library-v10-0 -D part0
+          gh run download 42617532935 -R lyonbegin/shared-n8n-studio \
+            -n strategy3455-library-v10-1 -D part1
+          cp -rn part0/strategies/. merged/strategies/
+          cp -rn part1/strategies/. merged/strategies/
+      - name: Compare precise original with v10 derived on 48 identical synthetic bars
+        run: |
+          source .pyne-venv/bin/activate
+          python recovery/test_original_vs_inline_parity_v3.py \
+            --bundles exact_v7 --inline merged \
+            --output parity_v10_${{ matrix.shard }} --shards 2 --shard ${{ matrix.shard }} --timeout 25
+      - name: Keep internal parity distinct from TradingView or order parity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('parity_v10_${{ matrix.shard }}/summary.json')
+          x=json.loads(p.read_text())
+          assert x['tradingview_parity_verified']==0
+          print('V10_INTERNAL_PARITY_REPORT',x)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy3455-library-v10-internal-parity-${{ matrix.shard }}
+          path: parity_v10_${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
