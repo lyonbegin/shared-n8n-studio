@@ -1,0 +1,101 @@
+﻿rank,script_id,title,published_ticker,published_timeframe,asset_class,decision,features,external_symbol_refs,87_candidate_keyword_only,risks,analysis_level,original_url
+1121,JG1TD71l,,CME_MINI:ES1!,D,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,EMA,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JG1TD71l-Ergotic-MACD-Strategy-Backtest/
+1122,JGhLPNVi,Monthly Returns in a Chart,BINANCE:BTCUSDT,60,암호화폐,EXCLUDE_CRYPTO,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JGhLPNVi-Monthly-Returns-of-a-Strategy-in-a-Chart/
+1123,JH9IMLVt,Convergence Protocol [JOAT],CRYPTO:BTCUSD,240,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JH9IMLVt-Convergence-Protocol-JOAT/
+1124,JJKYs2lH,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,EMA; SMA; STOCH,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JJKYs2lH-Combo-Backtest-123-Reversal-EMA-MA-Crossover/
+1125,JJxTJyJd,,BINANCE:ETHUSDT,1,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JJxTJyJd/
+1126,JMm04UG5,,BINANCE:ETHUSDT,15,암호화폐,EXCLUDE_CRYPTO,RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JMm04UG5-RSI-Classic-Strategy-by-Coinrule/
+1127,JNTdgnin,HyperSAR Reactor ,CRYPTO:BTCUSD,60,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; ATR; CORRELATION,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JNTdgnin-Hyper-SAR-Reactor-Trend-Strategy/
+1128,JO8IDVlT,Ema Backtester,BNC:BLX,1D,기초자산 조사,HOLD_UNDERLYING,EMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JO8IDVlT-Ema-Backtester/
+1129,JQTs1PMK,WBTUSDT 4H Impulse Pullback + Breakout Continuation Strategy - S/R + RSI/MACD/SMA Filter,WHITEBIT:WBTUSDT,240,암호화폐,EXCLUDE_CRYPTO,SMA; RSI; MACD,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JQTs1PMK-WBTUSDT-4H-Pullback-and-Breakout-Strategy/
+1130,JS7E8lGx,,BINANCE:BTCUSDT,30,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; STOCH,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JS7E8lGx/
+1131,JSLmFiE6,,NASDAQ:TSLA,1D,주식,EXCLUDE_STOCK,EMA; SMA; ATR; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JSLmFiE6-EMAC-Exponential-Moving-Average-Cross-Optimized/
+1132,JTEmA2hf,Trend Following or Mean Reverting,NSE:NIFTY,1D,기초자산 조사,HOLD_UNDERLYING,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JTEmA2hf-Trend-Following-or-Mean-Reverting/
+1133,JUJejit7,YM Max Pain Strategy with Visualization,CME_MINI:MNQ1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SMA; EXTERNAL_SYMBOL,TVC:VIX,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JUJejit7/
+1134,JVpFeVLc,Strategy Auto-Optimized by Backpulse,BYBIT:AKEUSDT.P,30,암호화폐,EXCLUDE_CRYPTO,EMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JVpFeVLc-Strategy-Auto-Optimized-by-Backpulse/
+1135,JW6VtQ8F,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SMA; STOCH; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JW6VtQ8F-Combo-Backtest-123-Reversal-Comparative-Relative-Strength/
+1136,JY8AYQiY,365 Day High Breakout Strategy,NSE:RELIANCE,1D,주식,EXCLUDE_STOCK,SMA; ATR; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JY8AYQiY-365-Day-High-Breakout-Strategy/
+1137,JbFpVOHr,,BITFINEX:BTCUSD,30,암호화폐,EXCLUDE_CRYPTO,SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JbFpVOHr-Percentage-Bands/
+1138,Jbk2fJc1,Allah's Compass,COMEX_MINI:MGC1!,5,귀금속,INCLUDE_ASSET,SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Jbk2fJc1-Allah-s-Compass/
+1139,Je0EGfi9,Execution Signals  Breakout Strategy MTF,CME_MINI:MNQ1!,1,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,ATR; VWAP; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Je0EGfi9-Execution-Signals-Breakout-Strategy-MTF/
+1140,JeRCEqWU,CleanTradeQuantum_v7.2_OB_FVG_INTEGRATED,PIONEX:ZECUSDT.P,60,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; RSI; ATR; MACD; VWAP; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JeRCEqWU-CleanTradeQuantum-v7-2-OB-FVG-INTEGRATED/
+1141,Jgo8w4m1,OBV Strategy V2,BINANCE:ETHUSDT,60,암호화폐,EXCLUDE_CRYPTO,,,,진입 주문코드 확인 필요; 명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Jgo8w4m1-OBV-MA-Strategy/
+1142,Jicyr9hK,,,5,종목 확인 대기,HOLD_MISSING_SYMBOL,RSI; BOLLINGER; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Jicyr9hK-3rsi-3cci-bb-5orders-dca-strategy/
+1143,JinDGmg4,GMS: Mean Reversion Strategy,AMEX:SPY,1D,기초자산 조사,HOLD_UNDERLYING,SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JinDGmg4-GMS-Mean-Reversion-Strategy/
+1144,JjFC24yn,[SM-042] EMA 5-8-13 with ADX Filter,FOREXCOM:EURUSD,30,외환,INCLUDE_ASSET,EMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JjFC24yn-SM-042-EMA-5-8-13-with-ADX-Filter/
+1145,JlivLSt3,Linear trend,BINANCE:ETHUSDT,240,암호화폐,EXCLUDE_CRYPTO,EMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JlivLSt3-Linear-trend/
+1146,Jn7Vfu33,"DNSE VN301!, MACD Cross Strategy",HNX:VN301!,5,선물 기초자산 조사,HOLD_UNDERLYING,SMA; MACD,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Jn7Vfu33/
+1147,JnSdAkSZ,,NSE:BANKNIFTY,5,기초자산 조사,HOLD_UNDERLYING,,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JnSdAkSZ-Candle-Strategy/
+1148,JoYgHVFj,Yesterday,,120,종목 확인 대기,HOLD_MISSING_SYMBOL,EMA; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JoYgHVFj-Yesterday-s-High-Breakout-Trend-Following-Strategy/
+1149,JtopWlYQ,RSI Oversold AO - Long Strategy,BINANCE:DOGEUSDT,60,암호화폐,EXCLUDE_CRYPTO,RSI; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JtopWlYQ-RSI-Oversold-AO-Long-Strategy/
+1150,JuZQRyIe,Oliver Velez BTC BUY-Only v1.0,BINANCE:BTCUSDT,2,암호화폐,EXCLUDE_CRYPTO,SMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JuZQRyIe-Oliver-Velez-BTC-BUY-Only-v1-0/
+1151,JwJnr9q3,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SMA,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JwJnr9q3-Modified-Price-Volume-Trend-Backtest/
+1152,JwQlZ3wu,Ehlers Instantaneous Trendline Strategy,BITMEX:BTCUSD.P,240,암호화폐,EXCLUDE_CRYPTO,,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JwQlZ3wu-Ehlers-Instantaneous-Trendline-Strategy/
+1153,JwoHz0GC,Hull MA of RSI Strategy,BINANCE:BTCUSDT,60,암호화폐,EXCLUDE_CRYPTO,RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/JwoHz0GC/
+1154,K0YibSRu,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SMA; STOCH,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K0YibSRu-Combo-Backtest-123-Reversal-Bull-Power/
+1155,K0ozrxGi,ARR VWAP Intraday,NSE:BANKNIFTY1!,15,선물 기초자산 조사,HOLD_UNDERLYING,RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K0ozrxGi-ARR-VWAP-Intraday/
+1156,K0tQNyfK,Algo 4- Auto,FX:GBPNZD,60,외환,INCLUDE_ASSET,SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K0tQNyfK-SSL-Channel-Automatic-Indicator-by-forexcakemix689-copy/
+1157,K0z32saO,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SMA; STOCH,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K0z32saO-Combo-Backtest-123-Reversal-Relative-Momentum-Index/
+1158,K3U9opwQ,,BITSTAMP:BTCUSD,240,암호화폐,EXCLUDE_CRYPTO,RSI; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K3U9opwQ-SuperTREX-strategy/
+1159,K3W7tQjO,RSI Cross [xaurr],FX_IDC:XAUUSD,1D,귀금속,INCLUDE_ASSET,EMA; RSI,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K3W7tQjO-RSI-Cross-xaurr/
+1160,K3s5dmdv,,NASDAQ:TSLA,240,주식,EXCLUDE_STOCK,SMA; ATR; ADX,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K3s5dmdv-TASC-2024-08-Volume-Confirmation-For-A-Trend-System/
+1161,K6TiNz65,,FX:EURUSD,5,외환,INCLUDE_ASSET,EXTERNAL_SYMBOL,,,명시적 청산코드 확인 필요; 외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/K6TiNz65-STRATEGY-RS-The-Truth-Strategy-V0/
+1162,KF74nzYo,,BITSTAMP:BTCUSD,1D,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; STOCH; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KF74nzYo/
+1163,KHBR2H0R,Automate on Hyperliquid - Strategy Webhook Template [HYPR-run],COINBASE:BTCUSD,480,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KHBR2H0R-Automate-on-Hyperliquid-Strategy-Webhook-Template-HYPR-run/
+1164,KIfPIMty,,CME_MINI:ES1!,D,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,EMA,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KIfPIMty-Percentage-Volume-Oscillator-PVO-Backtest/
+1165,KKGMELzx,SPY Wheel Strategy,AMEX:SPY,1D,기초자산 조사,HOLD_UNDERLYING,EMA; SMA; RSI; VWAP; EXTERNAL_SYMBOL,VIX,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KKGMELzx-SPY-Wheel-Strategy/
+1166,KM4wOmrL,QQE Trend Strategy [Long/Short],TVC:GOLD,5,귀금속,INCLUDE_ASSET,EMA; RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KM4wOmrL/
+1167,KMquJbZS,Heiken Ashi MTF Strategy,MCX:CRUDEOIL1!,1D,선물 기초자산 조사,HOLD_UNDERLYING,EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KMquJbZS-Heiken-Ashi-MTF-Strategy-Indicator/
+1168,KN5zWVtQ,CCI Level Zero Strategy (by Marcoweb) v1.0,FX:EURUSD,1,외환,INCLUDE_ASSET,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KN5zWVtQ-CCI-Level-Zero-Strategy-by-Marcoweb-v1-0/
+1169,KO7Qe4Xb, Strategy Validation Framework - Standardised ATR Exits & 1% Ris,FX:XAUUSD,1D,귀금속,INCLUDE_ASSET,EMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KO7Qe4Xb-Strategy-Validation-Framework-Standardised-ATR-Exits-1-Ris/
+1170,KOfsPM9h,SUPPORT RESISTANCE STRATEGY [5MIN TF],NSE:TCS,5,주식,EXCLUDE_STOCK,EMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KOfsPM9h-SUPPORT-RESISTANCE-STRATEGY-5MIN-TF/
+1171,KPoMQJ46,My strategy 9,CRYPTO:BTCUSD,1D,암호화폐,EXCLUDE_CRYPTO,SMA; EXTERNAL_SYMBOL,,,명시적 청산코드 확인 필요; 외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KPoMQJ46-My-strategy-9/
+1172,KQnZkLDq,Indian Scalper 2025 – PSAR + SMA50 + RSI≤50 + High Volume,NSE:NIFTY,3,기초자산 조사,HOLD_UNDERLYING,SMA; RSI; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KQnZkLDq-Indian-Scalper-2025-PSAR-SMA50-RSI-50-High-Volume-75/
+1173,KQpraXem,Backtest Template [Backtest Terminal],EIGHTCAP:XAUUSD,1,귀금속,INCLUDE_ASSET,EMA; SESSION,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KQpraXem-Backtest-Template-Backtest-Terminal/
+1174,KUyDNRyQ,,BITSTAMP:ETHBTC,60,암호화폐,EXCLUDE_CRYPTO,EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KUyDNRyQ-HMA-D1-crossover/
+1175,KVKt8gvv,SmartDCA,BINANCE:XRPUSDT.P,240,암호화폐,EXCLUDE_CRYPTO,RSI; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KVKt8gvv/
+1176,KVMbvcHV,,CME_MINI:ES1!,D,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KVMbvcHV-Kaufman-Moving-Average-Adaptive-KAMA-Backtest/
+1177,KW2v4SNI,SMA(4)/SMA(30),AMEX:USD,1D,기초자산 조사,HOLD_UNDERLYING,SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KW2v4SNI-SMA-4-SMA-30/
+1178,KX7AgFeB,ORB + Fib Breakout Signals (Strategy),CME_MINI:MNQ1!,30,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,ATR; SESSION,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KX7AgFeB-ORB-Fib-Breakout-Signals-Strategy/
+1179,KYB6AmC1,Indicator420 strategy,FX:NZDUSD,240,외환,INCLUDE_ASSET,,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KYB6AmC1-Indicator420-strategy/
+1180,KZ8Brbpv,LAGging span leaves Bollinger Bands strategy,COINBASE:ETHUSD,60,암호화폐,EXCLUDE_CRYPTO,SMA,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KZ8Brbpv-LAGging-span-leaves-Bollinger-Bands-strategy/
+1181,KZFK3pHr,is_strategy,BINANCE:SOLUSDT,180,암호화폐,EXCLUDE_CRYPTO,,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KZFK3pHr-is-strategy/
+1182,Kaee9KIy,ORB Small Range Breakout Strategy v1.5,LSE:BARC,5,주식,EXCLUDE_STOCK,,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kaee9KIy-ORB-Small-Range-Breakout-Strategy-v1-6/
+1183,KafnxzJR,,NASDAQ:ODFL,1D,주식,EXCLUDE_STOCK,SMA; RSI; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KafnxzJR-Advanced-VWAP-Pullback-Strategy-Trend-Template-Qualifier/
+1184,KdC6xqb8,HullTimeFrameCrossOver,BINANCE:BTCUSDT,120,암호화폐,EXCLUDE_CRYPTO,EMA; SMA; ATR; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KdC6xqb8-Hull-MA-TimeFrame-CrossOver/
+1185,KdjRKBI5,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SMA; STOCH,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KdjRKBI5-Combo-Backtest-123-Reversal-CMOav/
+1186,KeWBWLGT,,BINANCE:ETHUSDT,1D,암호화폐,EXCLUDE_CRYPTO,EMA; EXTERNAL_SYMBOL,,,미래참조 설정 주의; 외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KeWBWLGT-Renko-Strategy-T3-V1/
+1187,Kf33o8g5,Swing Parabolic SAR Strategy,OANDA:GBPJPY,1D,외환,INCLUDE_ASSET,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kf33o8g5-Simple-and-efficient-PSAR-swing-strategy/
+1188,KfJuq9em,,HNX:VN301!,1,선물 기초자산 조사,HOLD_UNDERLYING,EMA; SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KfJuq9em-DNSE-VN301-SMA-EMA-Cross-Strategy/
+1189,KfljniYA,SOLUSD 1D 100 Pivot Reclaim and Breakdown Strategy - S/R + RSI/MACD/SMA Filter,WHITEBIT:SOLUSDT,240,암호화폐,EXCLUDE_CRYPTO,SMA; RSI; MACD,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KfljniYA-SOLUSD-4H-100-Pivot-Strategy-RSI-MACD-SMA/
+1190,Kh6czPWr,,NASDAQ:AAPL,60,주식,EXCLUDE_STOCK,EMA; RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kh6czPWr-Aroon-Oscillator-Strategy/
+1191,KkJ2UKGR,KD base strategy,TWSE:IX0001,1D,기초자산 조사,HOLD_UNDERLYING,STOCH,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KkJ2UKGR/
+1192,Kl351EgC,Bollinger Band Below Price with RSI,BINANCE:XRPUSDT,120,암호화폐,EXCLUDE_CRYPTO,SMA; RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kl351EgC-Shorting-when-Bollinger-Band-Above-Price-with-RSI-by-Coinrule/
+1193,KlaTN7AD,Elliott Wave Full Fractal System v2.0,NASDAQ:CMTL,1D,주식,EXCLUDE_STOCK,EMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KlaTN7AD-Elliott-Wave-Full-Fractal-System-v2-0/
+1194,KmzqWloV,TWE 2-Bar Break Strategy,BINANCE:BTCUSDT,120,암호화폐,EXCLUDE_CRYPTO,EMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KmzqWloV-TWE-2-Bar-Break-Strategy/
+1195,Kn28VIrm,Donchian Channels System,TVC:USOIL,1D,원자재·농산물·에너지,INCLUDE_ASSET,,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kn28VIrm-Donchian-Channels-System-racer8/
+1196,KpbbCOzp,,BINANCE:ETHBTC,1,암호화폐,EXCLUDE_CRYPTO,EMA; SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KpbbCOzp-Autoview-BackTest-Dual-MA-Ribbons-R0-12-by-JustUncleL/
+1197,Kt6XkQIM,Statistical Arbitrage Pairs Trading - Long-Side Only,NASDAQ:GOOGL,1D,주식,EXCLUDE_STOCK,SMA; EXTERNAL_SYMBOL,,S028,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kt6XkQIM-Statistical-Arbitrage-Pairs-Trading-Long-Side-Only/
+1198,KuijQFFg,RSI and MA Strategy with Trailing Stop Loss and Take Profit,BINANCE:AVAUSDT,30,암호화폐,EXCLUDE_CRYPTO,SMA; RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KuijQFFg-RSI-and-MA-with-Trailing-Stop-Loss-and-Take-Profit-by-Coinrule/
+1199,KvJKGi0C,,CME_MINI:ES1!,D,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,EMA,,,진입 주문코드 확인 필요; 명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KvJKGi0C-SMI-Ergodic-Oscillator-Strategy-ver-2/
+1200,KvfNlWQf,,KRAKEN:ETHUSD,5,암호화폐,EXCLUDE_CRYPTO,EMA; RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KvfNlWQf-TemaVWAPRSI-Strategy/
+1201,KvuTPxhh,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/KvuTPxhh-Trend-continuation-factor-Backtest/
+1202,Kw11wQxH,JI FVG Short Strategy (ES 5m),CME_MINI:ES1!,5,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kw11wQxH-JI-FVG-Short-Strategy-ES-5m/
+1203,Ky2dfFEn,Parabolic SAR Strategy,OANDA:GBPJPY,1D,외환,INCLUDE_ASSET,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Ky2dfFEn-Parabolic-SAR-Swing-strategy-GBP-JPY-Daily-timeframe/
+1204,Kz4wRzup,Bearish Wick Reversal,NYSE:V,1D,주식,EXCLUDE_STOCK,EMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/Kz4wRzup-Bearish-Wick-Reversal/
+1205,L306HHgg,,BINANCE:BTCUSDT.P,30,암호화폐,EXCLUDE_CRYPTO,SMA,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/L306HHgg-DMI-HMA-No-Risk-Management/
+1206,L6VNlhiV,Hash Momentum Strategy,BINANCE:BTCUSDT.P,240,암호화폐,EXCLUDE_CRYPTO,EMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/L6VNlhiV-Hash-Momentum-Strategy/
+1207,L7P3quUz,VWAP Suite | Trend & Mean Reversion with Adaptive Filters,NASDAQ:NVDA,120,주식,EXCLUDE_STOCK,EMA; SMA; RSI; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/L7P3quUz-VWAP-Suite-Trend-Mean-Reversion-with-Adaptive-Filters/
+1208,L7mtz5rq,,KUCOIN:HYPEUSDT,60,암호화폐,EXCLUDE_CRYPTO,RSI,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/L7mtz5rq-HYPE-Prop-Bullish-Reversion-RSI-Timed-Exit/
+1209,L8Uy96Ex,,CME_MINI:ES1!,30,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,,,,명시적 청산코드 확인 필요,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/L8Uy96Ex-TFS-Tether-Line-Backtest/
+1210,L9GkARD2,,BINANCE:BTCUSDT,1D,암호화폐,EXCLUDE_CRYPTO,ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/L9GkARD2-SUPERTREND-ATR-WITH-TRAILING-STOP-LOSS/
+1211,L9bnQNYf,EMA Crossover Strategy (15m),PEPPERSTONE:NAS100,15,기초자산 조사,HOLD_UNDERLYING,EMA; EXTERNAL_SYMBOL,,,명시적 청산코드 확인 필요; 외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/L9bnQNYf-EMA-Crossover-Strategy-15m/
+1212,LA06Kpl1,TM 50% Fib Strategy v2.5,CME_MINI:MNQ1!,1,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SESSION,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LA06Kpl1-TM-50-Fib-Strategy-v2-5/
+1213,LAm9Baup,,AMEX:SPY,30,기초자산 조사,HOLD_UNDERLYING,SMA; ATR; EXTERNAL_SYMBOL,,,미래참조 설정 주의; 외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LAm9Baup-ATR-Volatility-Breakout/
+1214,LB3VE9t8,Prism Strategy,BIST:PASEU,60,주식,EXCLUDE_STOCK,EMA; SMA; RSI; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LB3VE9t8/
+1215,LBcj22se,Trend Pulse OBV,NASDAQ:AAPL,1D,주식,EXCLUDE_STOCK,EMA; ATR,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LBcj22se-Trend-Pulse-OBV/
+1216,LD44obOr,,CME_MINI:ES1!,60,주가지수선물,INCLUDE_INDEX_FUTURE_POLICY,SMA; STOCH,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LD44obOr-Combo-Backtest-123-Reversal-Line-Regression-Intercept/
+1217,LDCIPS8i,BTC Volatility Band Strategy,BINANCE:BTCUSDT,1D,암호화폐,EXCLUDE_CRYPTO,SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LDCIPS8i-BTC-Volatility-Band-Strategy/
+1218,LDk7bX6z,Normalized Vector Strategy [5] (mod+ts),COINBASE:BTCUSD,1,암호화폐,EXCLUDE_CRYPTO,EMA; EXTERNAL_SYMBOL,,,외부시세/상위시간봉 리페인팅 검토,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LDk7bX6z-scaled-normalized-vector-strategy-ver-4-1/
+1219,LEemTTOT,[SHORT ONLY] 10 Bar Low Pullback,AMEX:UNG,1D,기초자산 조사,HOLD_UNDERLYING,EMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LEemTTOT-SHORT-ONLY-10-Bar-Low-Pullback/
+1220,LIcdcfU8,Mean-Reversion Swing Trading Strategy v1,OANDA:EURUSD,60,외환,INCLUDE_ASSET,SMA,,,,PROGRAMMATIC_PINE_EVIDENCE,https://www.tradingview.com/script/LIcdcfU8-Mean-Reversion-Swing-Trading-Strategy-v1/
