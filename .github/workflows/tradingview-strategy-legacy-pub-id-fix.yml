@@ -1,0 +1,89 @@
+name: Strategy source legacy PUB ID final recovery
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/retry_short_pub_ids_v2.py'
+      - '.github/workflows/tradingview-strategy-legacy-pub-id-fix.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  repair:
+    name: Legacy public PUB ID recovery shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0,1,2,3]}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Download corrected source shard only
+        run: |
+          mkdir -p source_shard
+          gh run download 42586137528 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recovery-shard-${{ matrix.shard }} -D source_shard
+          test -s source_shard/status.csv
+      - name: Retry short legacy PUB identifiers and oversized HTML only
+        run: python recovery/retry_short_pub_ids_v2.py --shard-dir source_shard
+      - name: Verify all official source SHA-256 checksums
+        run: |
+          python - <<'PY'
+          import csv,hashlib
+          from pathlib import Path
+          root=Path('source_shard')
+          rows=list(csv.DictReader((root/'status.csv').open(encoding='utf-8-sig')))
+          for r in rows:
+              if r['source_path']:
+                  assert hashlib.sha256((root/r['source_path']).read_bytes()).hexdigest()==r['pine_sha256'],r['script_id']
+          assert len(rows) in (884,885)
+          print('SOURCE_HASH_VALIDATED',len(rows))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy4428-recovery-shard-${{ matrix.shard }}
+          path: source_shard/
+          retention-days: 30
+          if-no-files-found: warn
+  aggregate:
+    name: Final Strategy 4428 verified source inventory
+    needs: repair
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Restore 4428 original catalog
+        run: |
+          mkdir -p source_4428
+          gh run download 42567572031 -R lyonbegin/shared-n8n-studio \
+            -n strategy-4428-pine-source-result -D source_4428
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: strategy4428-recovery-shard-*
+          path: collected
+          merge-multiple: false
+      - name: Verify unique 4428 IDs and publish source counts
+        run: python recovery/aggregate_recovery.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy4428-final-public-source-recovery-report-v2
+          path: final_recovery/
+          retention-days: 30
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: strategy4428-final-public-pine-source-packages-v2
+          path: collected/
+          retention-days: 30
+          if-no-files-found: warn
