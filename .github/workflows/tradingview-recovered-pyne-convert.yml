@@ -41,18 +41,18 @@ jobs:
           test -f /tmp/wf02-isolated/n8n/editor-adapter/investment_free_pyne.py
       - name: Wait for independent full official Pine recovery run
         run: |
-          gh run watch 42584299751 -R lyonbegin/shared-n8n-studio --interval 10 --exit-status
+          gh run watch 42586137528 -R lyonbegin/shared-n8n-studio --interval 10 --exit-status
       - name: Download source shard without mixing unrelated strategies
         run: |
           mkdir -p source_shard
-          gh run download 42584299751 -R lyonbegin/shared-n8n-studio \
+          gh run download 42586137528 -R lyonbegin/shared-n8n-studio \
             -n strategy4428-recovery-shard-${{ matrix.shard }} -D source_shard
           test -f source_shard/status.csv
       - name: Compile genuine recovered open Pine to Python when no imports
         shell: bash
         run: |
           source .pyne-venv/bin/activate
-          python recovery/convert_recovered_free_pyne.py \
+          python recovery/convert_recovered_free_pyne_v2.py \
             --source-root source_shard --output converted-shard-${{ matrix.shard }} \
             --compile-timeout 30
       - name: Check source coverage and generated Python hashes
@@ -97,8 +97,8 @@ jobs:
           mkdir -p prior_4428 recovered_final
           gh run download 42576753854 -R lyonbegin/shared-n8n-studio \
             -n strategy4428-final-audit-verified -D prior_4428
-          gh run download 42584299751 -R lyonbegin/shared-n8n-studio \
-            -n strategy4428-source-recovery-final-report -D recovered_final
+          gh run download 42586137528 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-corrected-source-recovery-final-report -D recovered_final
       - uses: actions/download-artifact@v4
         with:
           pattern: strategy4428-recovered-python-shard-*
