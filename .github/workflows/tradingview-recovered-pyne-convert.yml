@@ -1,0 +1,124 @@
+name: Strategy 4428 recovered public Pine free PYNE conversion
+on:
+  push:
+    branches: [sandbox/strategy4428-recursive-library-20261109]
+    paths:
+      - 'recovery/convert_recovered_free_pyne.py'
+      - 'recovery/aggregate_converted.py'
+      - '.github/workflows/tradingview-recovered-pyne-convert.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: strategy4428-official-recovered-pyne-convert
+  cancel-in-progress: false
+jobs:
+  convert:
+    name: Free PYNE recovered shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WF02_ADAPTER_DIR: /tmp/wf02-isolated/n8n/editor-adapter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install pinned free hoox-pyne compiler
+        run: |
+          python -m venv .pyne-venv
+          .pyne-venv/bin/python -m pip install --disable-pip-version-check 'hoox-pyne[compile]==0.6.31'
+          .pyne-venv/bin/pyne --version
+      - name: Clone WF02 code only; no production connections
+        run: |
+          git clone --depth 1 --branch sandbox/wf02-pine-library-isolated-20261109 \
+            https://github.com/lyonbegin/autonomous-investor-backend.git /tmp/wf02-isolated
+          test -f /tmp/wf02-isolated/n8n/editor-adapter/investment_free_pyne.py
+      - name: Wait for independent full official Pine recovery run
+        run: |
+          gh run watch 42584299751 -R lyonbegin/shared-n8n-studio --interval 10 --exit-status
+      - name: Download source shard without mixing unrelated strategies
+        run: |
+          mkdir -p source_shard
+          gh run download 42584299751 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-recovery-shard-${{ matrix.shard }} -D source_shard
+          test -f source_shard/status.csv
+      - name: Compile genuine recovered open Pine to Python when no imports
+        shell: bash
+        run: |
+          source .pyne-venv/bin/activate
+          python recovery/convert_recovered_free_pyne.py \
+            --source-root source_shard --output converted-shard-${{ matrix.shard }} \
+            --compile-timeout 30
+      - name: Check source coverage and generated Python hashes
+        run: |
+          python - <<'PY'
+          import csv,hashlib
+          from pathlib import Path
+          shard='${{ matrix.shard }}'
+          dest=Path('converted-shard-'+shard)
+          rows=list(csv.DictReader((dest/'conversion_status.csv').open(encoding='utf-8-sig')))
+          exp=885 if shard=='0' else 884
+          assert len(rows)==exp, (len(rows),exp)
+          for x in rows:
+              if x['python_sha256']:
+                  py=dest/'strategies'/x['script_id']/'conversion'/'generated.py'
+                  assert py.is_file()
+                  assert hashlib.sha256(py.read_bytes()).hexdigest()==x['python_sha256']
+          print("VERIFIED_CONVERSION_SHARD",shard,len(rows),flush=True)
+          PY
+      - name: Preserve generated Python and exact original Pine
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-recovered-python-shard-${{ matrix.shard }}
+          path: converted-shard-${{ matrix.shard }}/
+          retention-days: 30
+          if-no-files-found: warn
+  aggregate:
+    name: Confirm total 4428 Strategy status and real conversion count
+    needs: convert
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Retrieve old 891-source results and new official recovered inventory
+        run: |
+          mkdir -p prior_4428 recovered_final
+          gh run download 42576753854 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-final-audit-verified -D prior_4428
+          gh run download 42584299751 -R lyonbegin/shared-n8n-studio \
+            -n strategy4428-source-recovery-final-report -D recovered_final
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: strategy4428-recovered-python-shard-*
+          path: converted_collected
+          merge-multiple: false
+      - name: Verify 4428 unique Strategy IDs; preserve conversion provenance
+        run: python recovery/aggregate_converted.py
+      - name: Publish pipeline audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-official-recovery-and-pyne-full-audit
+          path: verified_4428_pipeline/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Publish recovered original and Python packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy4428-official-recovered-python-packages
+          path: converted_collected/
+          retention-days: 30
+          if-no-files-found: warn
