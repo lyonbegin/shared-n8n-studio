@@ -1,0 +1,116 @@
+name: TradingView 29462 Indicator published chart audit
+on:
+  push:
+    branches: [sandbox/strategy4428-gap-recovery-20261109]
+    paths:
+      - recovery/indicator_chart_audit.py
+      - recovery/tv_indicator_manifest_0.tsv
+      - recovery/tv_indicator_manifest_1.tsv
+      - .github/workflows/indicator-29462-chart-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tv-indicator-published-chart-full-audit
+  cancel-in-progress: false
+jobs:
+  scan:
+    name: Indicator chart evidence ${{ matrix.shard }}/24
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate source code and collect genuine published chart evidence
+        run: |
+          python -m py_compile recovery/indicator_chart_audit.py recovery/tradingview_pub_chart_3393_audit.py
+          python recovery/indicator_chart_audit.py --shard ${{ matrix.shard }} --shards 24 --workers 4 --out indicator_shard_${{ matrix.shard }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tv-indicator-chart-${{ matrix.shard }}
+          path: |
+            indicator_shard_${{ matrix.shard }}/results.json
+            indicator_shard_${{ matrix.shard }}/summary.json
+          if-no-files-found: warn
+          retention-days: 30
+  aggregate:
+    needs: scan
+    if: always()
+    name: Merge and audit exactly 29462 indicator IDs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tv-indicator-chart-*
+          path: indicator_shards
+      - name: Merge observed evidence without inflating success
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib,json,csv,collections,datetime
+          root=pathlib.Path('indicator_shards')
+          manifest={}
+          for s in ('recovery/tv_indicator_manifest_0.tsv','recovery/tv_indicator_manifest_1.tsv'):
+              for line in pathlib.Path(s).read_text('utf8').splitlines():
+                  if not line.strip():continue
+                  sid,path=line.split('\t',1)
+                  assert sid not in manifest,sid
+                  manifest[sid]='https://www.tradingview.com/script/'+path
+          assert len(manifest)==29462,len(manifest)
+          facts={}
+          files=sorted(root.rglob('results.json'))
+          for file in files:
+              rows=json.loads(file.read_text('utf8'))
+              for sid,row in rows.items():
+                  assert sid in manifest and sid not in facts,sid
+                  facts[sid]=row
+          out=pathlib.Path('indicator_audit_29462')
+          out.mkdir(exist_ok=True)
+          cols=['script_id','original_url','chart_evidence_status','page_verified','published_ticker','published_tv_type',
+            'published_exchange','ticker_title','published_timeframe','chart_image_url','image_downloaded',
+            'image_sha256','image_size','evidence_type','reviewed_at_utc','error']
+          counts=collections.Counter()
+          assettypes=collections.Counter()
+          with (out/'indicators_published_chart_evidence.csv').open('w',encoding='utf-8-sig',newline='') as handle:
+              w=csv.DictWriter(handle,fieldnames=cols)
+              w.writeheader()
+              for sid,url in sorted(manifest.items()):
+                  rec=facts.get(sid,{'script_id':sid,'original_url':url,
+                     'chart_evidence_status':'NOT_EXECUTED','page_verified':False,
+                     'published_ticker':'','published_tv_type':'','image_downloaded':False,
+                     'error':'Shard result missing; do not count as visited'})
+                  rec['script_id']=sid
+                  rec['original_url']=url
+                  status=rec.get('chart_evidence_status') or 'UNVERIFIED_RETRY_NEEDED'
+                  counts[status]+=1
+                  assettypes[rec.get('published_tv_type','')]+=1
+                  w.writerow({c:rec.get(c,'') for c in cols})
+          summary={'expected':len(manifest),'attempted':len(facts),
+            'not_executed':len(manifest)-len(facts),'shard_files':len(files),
+            'evidence_status':dict(counts),'published_asset_types':dict(assettypes),
+            'created_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'classification_note':'Published chart instrument is not proof of indicator exclusivity; A requires stock/ETF/spot-crypto and direction-only functionality. Unknown is NOT verified.'}
+          (out/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf8')
+          assert sum(counts.values()) == 29462
+          print('FULL_INDICATOR_CHART_AUDIT',json.dumps(summary,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tv-indicator-chart-29462-merged
+          path: indicator_audit_29462/
+          if-no-files-found: warn
+          retention-days: 30
